@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "entries": [
+    {
+      "url": "https://arctouch.com/",
+      "profileKey": "mobile-3g",
+      "device": "mobile",
+      "throttling": "mobile3G",
+      "metrics": {
+        "performanceScore": 70,
+        "fcpMs": 2000,
+        "lcpMs": 3500,
+        "ttiMs": 6000,
+        "tbtMs": 300,
+        "cls": 0.05,
+        "speedIndexMs": 4000,
+        "ttfbMs": 150
+      },
+      "runs": 3,
+      "aggregation": "median"
+    }
+  ]
+}

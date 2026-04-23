@@ -1,0 +1,90 @@
+name: Web Performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "URL base a testar (sobrescreve tests/config/web-perf.json)"
+        required: false
+        default: ""
+      lighthouse_runs:
+        description: "Número de runs por cenário"
+        required: false
+        default: "3"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/config/web-perf.json"
+      - ".github/workflows/web-perf.yml"
+  schedule:
+    # Segunda a sexta, 09:00 BRT (12:00 UTC) — monitoramento sintético
+    - cron: "0 12 * * 1-5"
+
+jobs:
+  lighthouse:
+    name: Lighthouse session
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Run web performance session
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          TARGET_WEB_URL: ${{ inputs.target_url }}
+          LIGHTHOUSE_RUNS: ${{ inputs.lighthouse_runs || '3' }}
+          WEB_PERF_BASELINE_PATH: ${{ vars.WEB_PERF_BASELINE_PATH }}
+          WEB_PERF_FAIL_ON_BASELINE_REGRESSION: ${{ vars.WEB_PERF_FAIL_ON_BASELINE_REGRESSION }}
+          WEB_PERF_STRICT: ${{ vars.WEB_PERF_STRICT }}
+          WEB_PERF_MIN_SCORE: ${{ vars.WEB_PERF_MIN_SCORE }}
+          WEB_PERF_MAX_LCP_MS: ${{ vars.WEB_PERF_MAX_LCP_MS }}
+        run: npm run example:webpage
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-perf-results-${{ github.run_id }}
+          path: results/web-perf/
+          retention-days: 14
+
+      - name: Summary (comentário em PR)
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SUMMARY_FILE=$(find results/web-perf -name session-summary.json | head -n1)
+          if [ -z "$SUMMARY_FILE" ]; then
+            echo "session-summary.json não encontrado"
+            exit 0
+          fi
+
+          echo "### Web Performance Session" > comment.md
+          echo "" >> comment.md
+          echo "| URL | Perfil | Score | LCP (ms) | TBT (ms) | TTFB (ms) | CLS |" >> comment.md
+          echo "|---|---|---:|---:|---:|---:|---:|" >> comment.md
+          node -e "
+            const s = require('./' + process.env.SUMMARY_FILE);
+            for (const e of s.entries) {
+              const m = e.metrics;
+              console.log('| ' + [e.url, e.profileKey, m.performanceScore, m.lcpMs, m.tbtMs, m.ttfbMs, m.cls].join(' | ') + ' |');
+            }
+          " SUMMARY_FILE="$SUMMARY_FILE" >> comment.md
+
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md || true

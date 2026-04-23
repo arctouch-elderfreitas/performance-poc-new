@@ -1,0 +1,41 @@
+{
+  "name": "performance-testing-poc",
+  "version": "0.1.0",
+  "description": "AI-powered performance testing framework for APIs using Claude",
+  "main": "dist/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "dev": "ts-node src/index.ts",
+    "example:simple": "ts-node tests/examples/01-simple-get.perf.ts",
+    "example:load": "ts-node tests/examples/02-load-test.perf.ts",
+    "example:ai": "ts-node tests/examples/03-ai-generated-test.perf.ts",
+    "example:chaos": "ts-node tests/examples/04-chaos-test.perf.ts",
+    "example:public": "ts-node tests/examples/05-public-api-test.perf.ts",
+    "example:webpage": "ts-node tests/examples/06-webpage-test.perf.ts",
+    "example:chaos-web": "ts-node tests/examples/07-chaos-web-test.perf.ts",
+    "example:auth-webpage": "ts-node tests/examples/08-authenticated-webpage.perf.ts",
+    "install:deps": "npm install --no-save axios dotenv"
+  },
+  "keywords": [
+    "performance-testing",
+    "ai",
+    "claude",
+    "load-testing",
+    "api-testing"
+  ],
+  "author": "Elder Freitas",
+  "license": "MIT",
+  "devDependencies": {
+    "chrome-launcher": "^1.2.1",
+    "dotenv": "^17.4.2",
+    "lighthouse": "^9.6.8",
+    "playwright": "^1.59.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

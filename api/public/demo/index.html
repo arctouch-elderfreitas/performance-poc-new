@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Performance Demo — Catálogo</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f8fafc; color: #111827; }
+    header { background: #0f172a; color: white; padding: 24px; }
+    header h1 { margin: 0; font-size: 24px; }
+    header p { margin: 6px 0 0; color: #cbd5e1; font-size: 14px; }
+    main { padding: 24px; max-width: 1000px; margin: 0 auto; }
+    #status { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+    #status.loading { background: #fef3c7; color: #92400e; }
+    #status.error { background: #fee2e2; color: #991b1b; }
+    #status.ok { background: #d1fae5; color: #065f46; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .card { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+    .card h3 { margin: 0 0 8px; font-size: 16px; }
+    .card p { margin: 4px 0; font-size: 14px; color: #4b5563; }
+    .card .price { font-size: 18px; font-weight: 700; color: #2563eb; }
+    .hero { width: 100%; height: 260px; background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 22px; margin-bottom: 24px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Performance Testing Demo</h1>
+    <p>Esta página consome a API mock local — habilite o chaos para ver o impacto no LCP.</p>
+  </header>
+  <main>
+    <div class="hero" id="hero">Catálogo de produtos</div>
+    <div id="status" class="loading">Carregando produtos…</div>
+    <div class="grid" id="products"></div>
+  </main>
+  <script>
+    (async function () {
+      const t0 = performance.now();
+      const statusEl = document.getElementById('status');
+      const grid = document.getElementById('products');
+      try {
+        const res = await fetch('/products');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const items = await res.json();
+        const dt = Math.round(performance.now() - t0);
+        statusEl.className = 'ok';
+        statusEl.textContent = items.length + ' produtos carregados em ' + dt + 'ms';
+        grid.innerHTML = items.map(function (p) {
+          return '<div class="card">' +
+            '<h3>' + (p.name || 'Produto') + '</h3>' +
+            '<p>' + (p.category || '') + '</p>' +
+            '<p class="price">R$ ' + (p.price || 0).toFixed(2) + '</p>' +
+          '</div>';
+        }).join('');
+      } catch (err) {
+        statusEl.className = 'error';
+        statusEl.textContent = 'Erro ao carregar produtos: ' + err.message;
+      }
+    })();
+  </script>
+</body>
+</html>

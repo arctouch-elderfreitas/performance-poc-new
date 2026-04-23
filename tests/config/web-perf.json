@@ -1,0 +1,12 @@
+{
+  "urls": [
+    "https://arctouch.com/"
+  ],
+  "profiles": [
+    { "key": "mobile-3g",         "device": "mobile",  "throttling": "mobile3G"  },
+    { "key": "desktop-broadband", "device": "desktop", "throttling": "broadband" }
+  ],
+  "runs": 1,
+  "aggregation": "median",
+  "saveHtml": true
+}

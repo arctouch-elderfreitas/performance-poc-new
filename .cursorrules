@@ -1,0 +1,84 @@
+You are helping Elder Freitas (QA Analyst) continue work on a performance testing POC.
+
+## Project Context
+
+**IDP Goal**: Build AI-powered performance testing framework for QA team presentation (June 2026).
+
+**Current Status**: MVP complete. Ready for:
+- Cursor IDE migration
+- Corporate account integration
+- Enhanced features (CI/CD, auth, chaining)
+
+**Key Resources**:
+- Full context: Read `IDP_CONTEXT.md` first
+- Talk outline: `docs/SLIDES_OUTLINE.md`
+- Article: `docs/NOTION_ARTICLE.md`
+- Final slides: `docs/Performance-Testing-com-IA.pptx`
+
+## Tech Stack
+
+- **Runtime**: Node.js 18+ + TypeScript (CommonJS)
+- **IA**: Groq (free, llama-3.1-8b-instant)
+- **Load testing**: Custom HTTP engine + Lighthouse v9
+- **Mock API**: Express on port 3000 with chaos middleware
+- **Documentation**: Markdown + pptxgenjs
+
+## Critical Setup
+
+Before running anything:
+1. Get Groq API key from console.groq.com (free)
+2. Add to `.env`: `GROQ_API_KEY=gsk_...`
+3. `npm install` (root) + `cd api && npm install`
+
+## Running
+
+```bash
+# Terminal 1: Mock API
+cd api && npm run dev
+
+# Terminal 2: Examples
+npm run example:simple    # Quick sanity check
+npm run example:chaos     # Best demo (4 scenarios)
+npm run example:webpage   # Lighthouse test
+npm run example:public    # JSONPlaceholder vs local
+```
+
+## Key Files
+
+- `src/` — Framework (engines, parsers, generators, utils)
+- `tests/examples/` — 6 working examples (all tested)
+- `api/` — Express mock server + chaos middleware
+- `docs/` — Notion article, slides outline, PPTX generator
+
+## Common Tasks
+
+**Add new API test example**: Copy `tests/examples/01-simple-get.perf.ts`, update URL + test config.
+
+**Tweak Groq analysis**: Edit prompts in `src/parsers/result-parser.ts` → `buildAnalysisPrompt()` / `buildLighthousePrompt()`.
+
+**Web perf plan**: `tests/config/web-perf.json` + env (`TARGET_WEB_URL`, `LIGHTHOUSE_RUNS`, `WEB_PERF_STRICT`, `WEB_PERF_BASELINE_PATH`). Runner: `src/engines/web-perf-runner.ts`.
+
+**Change mock API behavior**: Edit chaos config in `api/src/middleware/chaos.ts` or POST to `/control/config`.
+
+**Update PPTX slides**: Modify `docs/create-slides.js`, run `node create-slides.js`, check output `docs/Performance-Testing-com-IA.pptx`.
+
+## Known Quirks
+
+- pptxgenjs mutates option objects in-place. Use factory functions for repeated props (e.g., `makeShadow()`).
+- All test examples must import `../../src/config/env` at top to load GROQ_API_KEY.
+- Lighthouse EPERM on Windows: Already handled (try/catch around `chrome.kill()`).
+- Groq sometimes returns JSON in markdown code blocks. Parser handles it (multi-attempt: raw → sanitize → regex).
+
+## Roadmap (v1.0)
+
+- [ ] OAuth / dynamic auth (refresh tokens)
+- [ ] Test chaining (result of A feeds B)
+- [ ] HTML report export
+- [ ] CI/CD integration with thresholds
+- [ ] Advanced chaos patterns (jitter, partial timeouts)
+
+**Talk date**: June 27, 2026 (QA team, 1 hour, live demo + 15 slides).
+
+---
+
+**Read IDP_CONTEXT.md for full details before starting.**
