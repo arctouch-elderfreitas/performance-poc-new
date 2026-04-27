@@ -102,7 +102,7 @@ export class ResultParser {
     return {
       ...base,
       nextSteps: [
-        `🤖 Para análise IA detalhada via Cursor agent, peça no chat: "Analise ${promptPath}"`,
+        `🤖 Análise IA: digite "/perf" no chat do Cursor (prompt salvo em ${promptPath})`,
         ...base.nextSteps,
       ],
     };

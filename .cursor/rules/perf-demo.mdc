@@ -1,0 +1,120 @@
+---
+description: Performance POC demo helpers — single-trigger analysis of latest test results
+alwaysApply: true
+---
+
+# Performance POC — Demo Triggers
+
+Quando o usuário digitar **`/perf`** (ou frases equivalentes em PT-BR como
+"analise os últimos testes", "rodar análise", "analisar último resultado"),
+execute o fluxo completo de análise abaixo sem pedir confirmação.
+
+## Frases-gatilho (qualquer uma ativa o fluxo)
+
+- `/perf`
+- `/perf:analyze`
+- "analise os últimos testes"
+- "rodar análise"
+- "analisar último resultado"
+- "analyze latest results"
+
+## Fluxo `/perf` (executar nesta ordem)
+
+### 1. Encontrar a sessão mais recente
+
+Liste subdiretórios em `results/api/` e `results/web-perf/` (caso existam) e
+escolha o **mais recentemente modificado** (mtime). Se nenhum existir,
+responda "Nenhum resultado encontrado. Rode `npm run demo:chaos` ou
+`npm run demo:web` antes." e encerre.
+
+Use `Glob` para listar e `Shell` (`ls -t` ou `stat`) para escolher o mais novo.
+Salve o caminho como `<session-dir>`.
+
+### 2. Listar prompts pendentes
+
+Use `Glob` em `<session-dir>/pending-analysis/*-prompt.md`.
+Se não houver prompts, encerre com "Sem prompts pendentes em `<session-dir>`".
+
+### 3. Para cada `*-prompt.md`
+
+a. Leia o arquivo (Read tool).
+b. Gere uma análise objetiva e técnica seguindo **exatamente** o schema do
+   prompt:
+
+```json
+{
+  "summary": "2-3 frases descrevendo o estado geral e o issue mais crítico",
+  "issues": ["string simples", "string simples"],
+  "recommendations": ["string simples", "string simples"],
+  "nextSteps": ["1. ação curta", "2. ação curta"]
+}
+```
+
+   - Cada item dos arrays é **string simples** (sem objetos aninhados).
+   - Para `web-session`: foque em padrões cross-URL ("X de Y páginas têm
+     problema Z → causa sistêmica"), nunca repita análise por URL individual.
+   - Para `web-worst`: diagnostique a URL+perfil específico, considere o
+     contexto de throttling (não compare mobile3G com desktop broadband
+     usando o mesmo critério).
+   - Para `api-test`: foque na relação entre as métricas (P95 vs P99,
+     throughput vs latência, distribuição de erros).
+
+c. Salve o JSON em `<session-dir>/pending-analysis/<kind>-output.json`
+   usando o Write tool (substitua `-prompt.md` por `-output.json`).
+
+### 4. Se a sessão for de web-perf, fundir no HTML
+
+Se `<session-dir>` começa com `results/web-perf/`, rode:
+
+```bash
+npm run analysis:apply -- <session-dir>
+```
+
+Em seguida, rode `open <session-dir>/session-report.html` para abrir o
+relatório no browser do usuário.
+
+### 5. Relatório final ao usuário
+
+Responda com **apenas** estas 3 coisas:
+
+1. ✅ uma linha confirmando o que foi feito (ex: "Análise aplicada em
+   `<session-dir>` (2 prompts processados)")
+2. O `summary` da análise principal entre aspas
+3. Se for web-perf: caminho do HTML que foi aberto. Se for api: caminho do
+   `*-output.json` gerado.
+
+Não repita o JSON inteiro nem cite tools — só o resultado humano.
+
+## Frases-gatilho compostas
+
+### `/perf:chaos`
+
+1. Rode no terminal: `npm run demo:chaos`
+2. Aguarde o término
+3. Execute o fluxo `/perf` acima
+
+### `/perf:web`
+
+1. Rode no terminal: `npm run demo:web`
+2. Aguarde o término
+3. Execute o fluxo `/perf` acima
+
+### `/perf:reset`
+
+Rode `npm run demo:reset` e confirme em uma linha. Limpa `results/` e reseta
+o chaos da mock API.
+
+## Nunca
+
+- **Nunca** chame APIs externas de LLM (Groq/Gemini/OpenAI/Anthropic). A
+  análise é **sua**, gerada com base nos dados do prompt.
+- **Nunca** edite arquivos fora de `<session-dir>/pending-analysis/`.
+- **Nunca** mude o schema do JSON de output (manter `summary`, `issues`,
+  `recommendations`, `nextSteps`).
+- **Nunca** peça confirmação no fluxo `/perf` — execute direto.
+
+## Contexto
+
+Este projeto testa performance de APIs e páginas web. Análise IA é feita
+**localmente** pelo agente do Cursor (você) em vez de provedores externos,
+por compliance corporativa. Detalhes em `IDP_CONTEXT.md`.

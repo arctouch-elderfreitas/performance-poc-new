@@ -17,6 +17,10 @@
     "example:chaos-web": "ts-node tests/examples/07-chaos-web-test.perf.ts",
     "example:auth-webpage": "ts-node tests/examples/08-authenticated-webpage.perf.ts",
     "analysis:apply": "ts-node scripts/apply-analysis.ts",
+    "demo:chaos": "ts-node tests/examples/04-chaos-test.perf.ts",
+    "demo:web": "ts-node tests/examples/06-webpage-test.perf.ts",
+    "demo:chaos-web": "ts-node tests/examples/07-chaos-web-test.perf.ts",
+    "demo:reset": "rm -rf results/* && cd api && curl -s -X POST http://localhost:3000/control/reset > /dev/null 2>&1 || true",
     "install:deps": "npm install --no-save axios dotenv"
   },
   "keywords": [
