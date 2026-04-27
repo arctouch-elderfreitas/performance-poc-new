@@ -1,6 +1,6 @@
-# Performance Testing POC — AI-Powered Framework
+# Performance Testing Framework — AI-Powered
 
-Framework de testes de performance com geração e análise por IA, desenvolvido como parte do IDP de Elder Freitas (QA Analyst).
+Framework de testes de performance com geração e análise por IA, integrado ao agente do Cursor IDE.
 
 ---
 
@@ -112,7 +112,20 @@ npm run dev
 # Disponível em http://localhost:3000
 ```
 
-### Terminal 2 — Exemplos
+### Terminal 2 — Atalhos rápidos (recomendado)
+
+Os atalhos `perf:*` rodam um exemplo + deixam um prompt pronto pra IA analisar. Combinados com `/perf` no chat do Cursor, dão o ciclo de teste + análise mais curto possível.
+
+```bash
+npm run perf:reset      # Limpa results/ e reseta a mock API
+npm run perf:chaos      # 4 cenários de chaos engineering na API
+npm run perf:web        # Lighthouse multi-perfil (mobile-3g + desktop-broadband)
+npm run perf:chaos-web  # API degradada × métricas da página que consome
+```
+
+Depois de qualquer um dos comandos acima, abra o chat do Cursor (`Cmd+L`) e digite `/perf`. O agente encontra a sessão recém-gerada, lê os prompts de análise pendentes, gera o JSON estruturado e — se for sessão web — funde no `session-report.html` automaticamente. Detalhes em [Integração com IA](#integração-com-ia--cursor-agent).
+
+### Terminal 2 — Exemplos completos
 
 ```bash
 npm run example:simple    # GET básico com métricas
@@ -214,18 +227,12 @@ Ao final da sessão, o framework prepara dois prompts em `pending-analysis/`:
 1. **`web-session-prompt.md`** — análise da sessão inteira (padrões cross-URL).
 2. **`web-worst-prompt.md`** — diagnóstico detalhado do pior cenário individual.
 
-Para gerar a análise:
+Para gerar a análise, abra o chat do Cursor (`Cmd+L`) e digite `/perf`. O agente encontra a sessão mais recente, processa os prompts, salva os outputs e funde tudo no `session-report.html`. Se preferir o passo manual:
 
 ```bash
-# 1. Abra o chat do Cursor e peça:
-#    "Analise results/web-perf/<timestamp>/pending-analysis/web-session-prompt.md
-#     e em seguida web-worst-prompt.md"
-#
-# 2. O agente salva os outputs em:
-#    pending-analysis/web-session-output.json
-#    pending-analysis/web-worst-output.json
-#
-# 3. Aplique a análise no relatório consolidado:
+# Outputs (gerados pelo agente):
+#   pending-analysis/web-session-output.json
+#   pending-analysis/web-worst-output.json
 npm run analysis:apply -- results/web-perf/<timestamp>
 ```
 
@@ -309,10 +316,10 @@ Demonstra como condições adversas da API (latência, erros) afetam as métrica
 cd api && npm run dev
 
 # 2. Em outro terminal
-npm run example:chaos-web
+npm run perf:chaos-web   # ou: npm run example:chaos-web
 ```
 
-O exemplo roda o Lighthouse em `http://localhost:3000/demo/` duas vezes: **sem** chaos e **com** chaos (300ms de latência + 10% de erros). Em seguida compara os deltas de FCP/LCP/Speed Index lado a lado e manda para a IA.
+O exemplo roda o Lighthouse em `http://localhost:3000/demo/` duas vezes: **sem** chaos e **com** chaos (300ms de latência + 10% de erros). Em seguida compara os deltas de FCP/LCP/Speed Index lado a lado e prepara o prompt para o agente do Cursor.
 
 É um diferencial real frente à extensão do Lighthouse: **nenhuma ferramenta de mercado permite simular backend degradado e medir impacto no frontend no mesmo ciclo**.
 
@@ -350,23 +357,39 @@ GET                  /demo/                 # Página HTML que consome /products
 
 Em vez de chamar provedores LLM externos (Groq, Gemini, OpenAI, Anthropic), o framework delega a análise ao **agente do Cursor IDE** que você já tem aberto. Isso atende à política corporativa que proíbe envio de dados para serviços de terceiros.
 
-**Fluxo em 3 etapas:**
+**Fluxo recomendado (1 comando + 1 gatilho):**
 
-1. **Script roda o teste** e salva um arquivo `*-prompt.md` em `pending-analysis/`. Esse arquivo contém:
-   - O prompt completo (com contexto de emulação de rede para Lighthouse)
-   - As instruções de formato de saída (JSON)
-   - O caminho onde o agente deve salvar o output
+```bash
+npm run perf:chaos    # ou perf:web / perf:chaos-web
+```
+
+No chat do Cursor (`Cmd+L`):
+
+```
+/perf
+```
+
+O gatilho `/perf` é definido em `.cursor/rules/perf.mdc` e instrui o agente a:
+
+1. Encontrar a sessão mais recente em `results/api/` ou `results/web-perf/`
+2. Processar todos os arquivos `*-prompt.md` em `pending-analysis/`
+3. Gerar análise estruturada (JSON com `summary`, `issues`, `recommendations`, `nextSteps`)
+4. Para sessões web: rodar `npm run analysis:apply` automaticamente e abrir o `session-report.html`
+
+**Fluxo equivalente em 3 etapas manuais:**
+
+1. **Script roda o teste** e salva um arquivo `*-prompt.md` em `pending-analysis/`. Esse arquivo contém o prompt completo, as instruções de formato e o caminho onde o agente deve salvar o output.
 2. **Você pede ao agente do Cursor**: `"Analise <caminho-do-prompt>"`. O agente lê o prompt, gera a análise estruturada e salva como `*-output.json`.
 3. **(Apenas web-perf)** Você roda `npm run analysis:apply -- <session-dir>` para fundir a análise no `session-report.html`.
 
-Vantagens:
+**Vantagens:**
 
 - Zero chave de API — sem custo, sem governança extra
 - Os dados de teste **nunca saem da sua máquina**
 - O modelo do Cursor (Opus, Sonnet etc.) é mais robusto que llama-3.1-8b-instant
 - Os prompts continuam versionados em `pending-analysis/` para auditoria
 
-Trade-off: a análise não é mais 100% headless dentro de um único `npm run`. É um passo manual a mais para invocar o agente.
+**Trade-off:** a análise não é mais 100% headless dentro de um único `npm run`. É um passo manual a mais para invocar o agente.
 
 Se nenhuma análise IA for produzida, o framework cai automaticamente em uma análise **baseada em regras** (thresholds de Web Vitals e SLA), garantindo que o relatório nunca fique vazio.
 
@@ -420,20 +443,19 @@ performance-poc/
 │       ├── server.ts
 │       ├── middleware/chaos.ts        # Injeção de latência e erros
 │       ├── routes/                    # users, products, orders, control
-│       └── store/memory-store.ts     # Dados em memória com seed
+│       └── store/memory-store.ts      # Dados em memória com seed
 │
 ├── docs/
-│   ├── NOTION_ARTICLE.md            # Artigo para publicação no Notion
-│   ├── SLIDES_OUTLINE.md            # Estrutura dos 15 slides da talk
-│   ├── create-slides.js             # Script pptxgenjs para gerar o PPTX
-│   └── Performance-Testing-com-IA.pptx
+│   └── ARCHITECTURE.md                # Visão técnica e decisões de arquitetura
 │
-├── results/                         # Gerado em runtime — ignorado pelo git
-│   └── web-perf/<timestamp>/        # Artefatos por sessão de testes
+├── .cursor/
+│   └── rules/perf.mdc                 # Regra do agente Cursor — define o gatilho /perf
 │
-├── .env.example                     # Modelo de variáveis de ambiente
-├── .env                             # Suas chaves (não vai ao git)
-└── IDP_CONTEXT.md                   # Contexto completo do IDP
+├── results/                           # Gerado em runtime — ignorado pelo git
+│   └── web-perf/<timestamp>/          # Artefatos por sessão de testes
+│
+├── .env.example                       # Modelo de variáveis de ambiente
+└── .env                               # Suas configurações locais (não vai ao git)
 ```
 
 ---
@@ -463,9 +485,3 @@ performance-poc/
 | ⬜ | Tendência entre sessões (gráfico de evolução) |
 | ⬜ | Cruzamento com CrUX API (lab + field data) |
 | ⬜ | Visual regression por screenshot |
-
----
-
-**Autor**: Elder Freitas — QA Analyst  
-**Repositório**: [github.com/arctouch-elderfreitas/performance-poc-new](https://github.com/arctouch-elderfreitas/performance-poc-new)  
-**Versão**: 0.4.0

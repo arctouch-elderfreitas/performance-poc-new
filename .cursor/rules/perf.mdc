@@ -1,9 +1,9 @@
 ---
-description: Performance POC demo helpers — single-trigger analysis of latest test results
+description: Performance framework — single-trigger AI analysis of latest test results
 alwaysApply: true
 ---
 
-# Performance POC — Demo Triggers
+# Performance Framework — Cursor Triggers
 
 Quando o usuário digitar **`/perf`** (ou frases equivalentes em PT-BR como
 "analise os últimos testes", "rodar análise", "analisar último resultado"),
@@ -24,8 +24,8 @@ execute o fluxo completo de análise abaixo sem pedir confirmação.
 
 Liste subdiretórios em `results/api/` e `results/web-perf/` (caso existam) e
 escolha o **mais recentemente modificado** (mtime). Se nenhum existir,
-responda "Nenhum resultado encontrado. Rode `npm run demo:chaos` ou
-`npm run demo:web` antes." e encerre.
+responda "Nenhum resultado encontrado. Rode `npm run perf:chaos` ou
+`npm run perf:web` antes." e encerre.
 
 Use `Glob` para listar e `Shell` (`ls -t` ou `stat`) para escolher o mais novo.
 Salve o caminho como `<session-dir>`.
@@ -89,19 +89,19 @@ Não repita o JSON inteiro nem cite tools — só o resultado humano.
 
 ### `/perf:chaos`
 
-1. Rode no terminal: `npm run demo:chaos`
+1. Rode no terminal: `npm run perf:chaos`
 2. Aguarde o término
 3. Execute o fluxo `/perf` acima
 
 ### `/perf:web`
 
-1. Rode no terminal: `npm run demo:web`
+1. Rode no terminal: `npm run perf:web`
 2. Aguarde o término
 3. Execute o fluxo `/perf` acima
 
 ### `/perf:reset`
 
-Rode `npm run demo:reset` e confirme em uma linha. Limpa `results/` e reseta
+Rode `npm run perf:reset` e confirme em uma linha. Limpa `results/` e reseta
 o chaos da mock API.
 
 ## Nunca
@@ -115,6 +115,6 @@ o chaos da mock API.
 
 ## Contexto
 
-Este projeto testa performance de APIs e páginas web. Análise IA é feita
+Este projeto testa performance de APIs e páginas web. A análise IA é feita
 **localmente** pelo agente do Cursor (você) em vez de provedores externos,
-por compliance corporativa. Detalhes em `IDP_CONTEXT.md`.
+por compliance corporativa. Os dados nunca saem da máquina.
