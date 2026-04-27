@@ -3,64 +3,64 @@
 **Author**: Elder Freitas — QA Analyst  
 **Period**: April—June 2026  
 **Goal**: Build AI-powered performance testing framework for QA team presentation  
-**Status**: ✅ MVP Complete — Ready for Cursor migration
+**Status**: ✅ MVP Complete — análise IA migrada para o agente do Cursor
 
 ---
 
 ## Project Overview
 
-Framework automatiza o ciclo completo de testes de performance:
-1. **Generate** test configs via IA (opcional)
-2. **Execute** HTTP requests in parallel + collect metrics
-3. **Analyze** results with IA → actionable insights
+Framework automatiza o ciclo de testes de performance:
+1. **Generate** — config padrão por template (variações via Cursor agent)
+2. **Execute** — HTTP requests em paralelo + coleta de métricas
+3. **Analyze** — análise IA via **agente do Cursor** (sem LLMs externos) + fallback por regras
 
 Plus:
-- **Mock API** (local, controllable) with chaos middleware
-- **Lighthouse** integration for webpage Core Web Vitals
-- **Groq** (free LLaMA) for AI analysis
+- **Mock API** local controlável com chaos middleware
+- **Lighthouse** para Core Web Vitals
+- **Cursor agent** como motor de análise (modelo Opus/Sonnet do próprio IDE)
 
 ---
 
 ## What's Done ✅
 
 ### Core Framework
-- `src/engines/http-engine.ts` — HTTP load testing orchestrator
-- `src/engines/lighthouse-engine.ts` — Webpage testing via Lighthouse
-- `src/generators/test-generator.ts` — AI-powered test config generation
-- `src/parsers/result-parser.ts` — AI analysis with Groq fallback chain (Groq → Gemini → Anthropic → rules)
-- `src/utils/` — HTTP client, metrics processor, logger
+- `src/engines/http-engine.ts` — orquestrador de carga HTTP
+- `src/engines/lighthouse-engine.ts` — Lighthouse com múltiplos runs e mediana
+- `src/engines/web-perf-runner.ts` — orquestra URLs × perfis e persiste artefatos
+- `src/generators/test-generator.ts` — config padrão (template puro, sem LLM)
+- `src/parsers/result-parser.ts` — salva prompts em `pending-analysis/` e retorna fallback por regras
+- `scripts/apply-analysis.ts` — aplica output do agente Cursor no `session-report.html`
+- `src/utils/` — HTTP client, metrics processor, logger, session HTML report, web-vitals assert, baseline diff, sitemap discovery, Playwright auth capture
 
 ### Mock API
-- `api/src/server.ts` — Express on port 3000
-- `api/src/middleware/chaos.ts` — Latency + error injection + timeout control
-- `api/src/routes/control.ts` — Dynamic chaos config via HTTP
-- `api/src/store/memory-store.ts` — In-memory users/products/orders + seed data
+- `api/src/server.ts` — Express na porta 3000
+- `api/src/middleware/chaos.ts` — injeção de latência/erros
+- `api/src/routes/control.ts` — config dinâmica via HTTP
+- `api/src/store/memory-store.ts` — dados em memória com seed
+- `api/public/demo/` — página HTML que consome `/products` (usada no chaos × web)
 
 ### Tests/Examples
-All 6 examples working and integrated:
-1. `01-simple-get.perf.ts` — Basic GET metrics
-2. `02-load-test.perf.ts` — Multi-endpoint parallel load
-3. `03-ai-generated-test.perf.ts` — IA gera config
-4. `04-chaos-test.perf.ts` — 4 cenários (baseline, latency 200ms, errors 20%, combined)
-5. `05-public-api-test.perf.ts` — JSONPlaceholder vs local comparison
-6. `06-webpage-test.perf.ts` — Lighthouse on arctouch.com (mobile 3G + desktop)
-
-All examples:
-- Import `../../src/config/env` at top (loads GROQ_API_KEY)
-- Target localhost:3000 or arctouch.com
-- Full AI analysis + comparison tables
+8 exemplos funcionando:
+1. `01-simple-get.perf.ts` — GET básico
+2. `02-load-test.perf.ts` — carga em múltiplos endpoints
+3. `03-ai-generated-test.perf.ts` — config padrão + análise via Cursor agent
+4. `04-chaos-test.perf.ts` — 4 cenários (baseline, latência, erros, combinado)
+5. `05-public-api-test.perf.ts` — JSONPlaceholder vs API local
+6. `06-webpage-test.perf.ts` — Lighthouse multi-URL × perfis com sessão completa
+7. `07-chaos-web-test.perf.ts` — chaos × web (API degradada vs página)
+8. `08-authenticated-webpage.perf.ts` — Playwright + Lighthouse autenticado
 
 ### Documentation
-- `README.md` — Setup, examples, metrics reference
-- `docs/NOTION_ARTICLE.md` — ~1500-word Notion article
-- `docs/SLIDES_OUTLINE.md` — 15-slide talk structure + presenter notes
-- `docs/create-slides.js` — pptxgenjs script (15 slides, color palette, all content)
-- `docs/Performance-Testing-com-IA.pptx` — Final PPTX ready for presentation
+- `README.md` — setup, exemplos, fluxo de análise via Cursor agent
+- `docs/NOTION_ARTICLE.md` — artigo Notion
+- `docs/SLIDES_OUTLINE.md` — outline da talk
+- `docs/create-slides.js` — pptxgenjs (15 slides)
+- `docs/Performance-Testing-com-IA.pptx` — slides finais
 
 ### Configuration
-- `.env` — GROQ_API_KEY + TARGET_API_URL (both required)
-- `tsconfig.json` — Node.js 18+, ES2020, strict mode, Jest types removed
-- `package.json` — All deps installed (pptxgenjs, lighthouse@9, chrome-launcher, groq, etc)
+- `.env` — apenas `TARGET_API_URL` e overrides opcionais (zero chaves de API)
+- `tsconfig.json` — Node 18+, ES2020, strict
+- `package.json` — script `analysis:apply` adicionado
 
 ---
 
@@ -68,21 +68,25 @@ All examples:
 
 | Choice | Why |
 |--------|-----|
-| Node.js 18+ + TypeScript | Team familiarity, type safety |
-| Groq (free) over ChatGPT | No billing, fast inference, good for team |
-| Lighthouse v9 (not v10+) | CommonJS compatibility, Chrome integration |
-| Mock API (Express) | Simple, widely known, chaos middleware easy to add |
-| CommonJS modules | Stable ecosystem for Node.js projects |
+| Node.js 18+ + TypeScript | Familiaridade do time, type safety |
+| Cursor agent over external LLM | Política corporativa proíbe envio de dados a terceiros |
+| Lighthouse v9 | Compatibilidade CommonJS, integração Chrome estável |
+| Mock API (Express) | Simples, conhecido, chaos middleware fácil |
+| Workflow 2 etapas (script → agente) | Trade-off automação × compliance |
 
 ---
 
-## Groq Setup (Critical)
+## Cursor Agent Setup (Critical)
 
-1. Visit [console.groq.com](https://console.groq.com)
-2. Create free account
-3. Generate API key
-4. Add to `.env`: `GROQ_API_KEY=gsk_...`
-5. Model: `llama-3.1-8b-instant` (hardcoded in result-parser.ts)
+Nada precisa ser instalado fora do IDE. O fluxo é:
+
+1. Você roda um exemplo: `npm run example:chaos`
+2. O script salva um prompt em `results/.../pending-analysis/<kind>-prompt.md`
+3. No chat do Cursor: `"Analise <caminho-do-prompt>"`
+4. O agente lê, gera análise estruturada e salva como `<kind>-output.json`
+5. Para web-perf, rode `npm run analysis:apply -- <session-dir>` para fundir no HTML
+
+Nenhuma chave de API é necessária. Os dados nunca saem da sua máquina.
 
 ---
 
@@ -90,49 +94,59 @@ All examples:
 
 ### Terminal 1: Mock API
 ```bash
-cd api
-npm run dev
-# Runs on http://localhost:3000
+cd api && npm run dev
+# http://localhost:3000
 ```
 
 ### Terminal 2: Tests
 ```bash
-npm run example:simple    # Quick test
-npm run example:chaos     # Best demo — 4 scenarios
-npm run example:webpage   # Lighthouse test
+npm run example:simple    # smoke test
+npm run example:chaos     # melhor demo — 4 cenários
+npm run example:webpage   # Lighthouse (mobile 3G + desktop)
 npm run example:public    # JSONPlaceholder vs local
+```
+
+### Análise IA (passo manual)
+Abra o chat do Cursor e peça:
+> "Analise os arquivos pendentes em `results/.../pending-analysis/`"
+
+Para sessões web, em seguida:
+```bash
+npm run analysis:apply -- results/web-perf/<timestamp>
 ```
 
 ---
 
 ## Remaining Gaps (for v1.0)
 
-- [ ] OAuth / dynamic auth (refresh tokens)
-- [ ] Test chaining (result of A feeds into B)
-- [ ] HTML report export
-- [ ] CI/CD integration with thresholds
-- [ ] Advanced chaos patterns (network jitter, partial timeouts)
+- [ ] OAuth / refresh tokens automáticos
+- [ ] Encadeamento de testes (resultado de A alimenta B)
+- [ ] Tendência entre sessões (gráfico de evolução)
+- [ ] Cruzamento com CrUX API (lab + field)
+- [ ] Visual regression por screenshot
+- [ ] Padrões avançados de chaos (jitter, timeouts parciais)
 
 ---
 
 ## Talk Details (June 2026)
 
-**Audience**: QA Team (8–12 people)  
-**Duration**: 1 hour  
-**Format**: Slides + live demo (terminal)
+**Audience**: QA Team (8–12 pessoas)  
+**Duration**: 1 hora  
+**Format**: Slides + demo ao vivo (terminal + Cursor chat)
 
 **Structure**:
 1. Abertura (10 min) — Slide 1–2
 2. O que é performance (10 min) — Slide 3–5
 3. Como funciona (10 min) — Slide 6–8
-4. Demo ao vivo (20 min) — Terminal (examples 1, 4, 6)
+4. Demo ao vivo (20 min) — Terminal + Cursor agent (examples 4, 6)
 5. Resultados (5 min) — Slide 10
 6. Q&A (5 min) — Slide 15
 
 **Key points**:
-- Performance não é especialista → IA elimina barreira de interpretação
-- Testes rodam em minutos, resultados prontos
-- Aplica-se desde hoje em endpoints reais
+- Performance não é especialista → IA do próprio Cursor elimina barreira
+- Testes rodam em minutos, análise em segundos via chat
+- Aplica-se desde hoje em endpoints/páginas reais
+- Sem dependência de serviços externos — compliance corporativa garantida
 
 **Demo fallback**: Screenshots pré-capturados (no internet dependency)
 
@@ -141,44 +155,40 @@ npm run example:public    # JSONPlaceholder vs local
 ## File Structure
 
 ```
-performance-testing-poc/
+performance-poc-new/
 ├── src/
-│   ├── config/env.ts              # Env vars (GROQ_API_KEY, etc)
+│   ├── config/
+│   │   ├── env.ts                   # Env vars (sem chaves de IA)
+│   │   └── web-perf.ts              # Plano + thresholds + baseline
 │   ├── engines/
-│   │   ├── http-engine.ts         # Load test orchestrator
-│   │   └── lighthouse-engine.ts   # Webpage testing
+│   │   ├── http-engine.ts           # Load test orchestrator
+│   │   ├── lighthouse-engine.ts     # Lighthouse com múltiplos runs
+│   │   └── web-perf-runner.ts       # URL × perfil + artefatos
 │   ├── generators/
-│   │   └── test-generator.ts      # AI test config generation
+│   │   └── test-generator.ts        # Template padrão (sem LLM)
 │   ├── parsers/
-│   │   └── result-parser.ts       # Groq + fallback analysis
+│   │   └── result-parser.ts         # Salva prompts pro Cursor agent + fallback
 │   └── utils/
-│       ├── http-client.ts         # HTTP + timing
-│       ├── metrics-processor.ts   # P50/P95/P99 calc
-│       └── logger.ts              # Terminal UI
-├── tests/examples/
-│   ├── 01-simple-get.perf.ts
-│   ├── 02-load-test.perf.ts
-│   ├── 03-ai-generated-test.perf.ts
-│   ├── 04-chaos-test.perf.ts
-│   ├── 05-public-api-test.perf.ts
-│   └── 06-webpage-test.perf.ts
-├── api/
-│   ├── src/
-│   │   ├── server.ts              # Express port 3000
-│   │   ├── middleware/chaos.ts    # Latency + error injection
-│   │   ├── routes/control.ts      # Dynamic config endpoints
-│   │   └── store/memory-store.ts  # In-memory data + seed
-│   └── package.json
-├── docs/
-│   ├── NOTION_ARTICLE.md          # ~1500 words
-│   ├── SLIDES_OUTLINE.md          # 15-slide outline
-│   ├── create-slides.js           # pptxgenjs script
-│   └── Performance-Testing-com-IA.pptx (FINAL)
-├── .env                           # GROQ_API_KEY, TARGET_API_URL
-├── README.md                      # Setup + reference
-├── package.json                   # Root deps
+│       ├── http-client.ts           # HTTP + timing
+│       ├── metrics-processor.ts     # P50/P95/P99
+│       ├── logger.ts                # Terminal UI
+│       ├── web-vitals-assert.ts     # Threshold checks
+│       ├── url-discovery.ts         # Sitemap discovery
+│       ├── session-html-report.ts   # Relatório HTML consolidado
+│       └── auth-capture.ts          # Playwright para login antes do Lighthouse
+├── scripts/
+│   └── apply-analysis.ts            # Aplica output do agente no relatório HTML
+├── tests/
+│   ├── examples/                    # 01–08
+│   └── config/web-perf.json         # Plano de execução
+├── api/                             # Mock Express (porta 3000)
+├── docs/                            # Notion, slides, PPTX
+├── results/                         # gerado em runtime (gitignored)
+├── .env / .env.example              # apenas overrides opcionais
+├── README.md
+├── package.json
 ├── tsconfig.json
-└── IDP_CONTEXT.md                 # This file
+└── IDP_CONTEXT.md                   # this file
 ```
 
 ---
@@ -187,37 +197,21 @@ performance-testing-poc/
 
 | Issue | Solution |
 |-------|----------|
-| ANTHROPIC_API_KEY billing | Switched to Groq (free) |
-| Groq JSON parse errors | Multi-attempt parser (raw → sanitize → regex) |
-| Lighthouse EPERM on Windows | try/catch `chrome.kill()`, ignore code==='EPERM' |
-| pptxgenjs module not found | npm init + npm install in docs/ |
-| Options mutation in pptxgenjs | Use factory function `makeShadow()` per call |
-| TypeScript jest types conflict | Removed from tsconfig types array |
-
----
-
-## Next Steps (for Cursor)
-
-1. Clone repo
-2. Ensure Node.js 18+ installed
-3. Create/get Groq API key (free at console.groq.com)
-4. Add `.env`:
-   ```
-   GROQ_API_KEY=gsk_...
-   TARGET_API_URL=http://localhost:3000
-   ```
-5. `npm install`
-6. `cd api && npm install && cd ..`
-7. Run examples: `npm run example:chaos`
+| Política corporativa bloqueia LLMs externos | Migração para análise via Cursor agent (Opus) |
+| Pessoal GitHub aparecia como collaborator | Repositório limpo `performance-poc-new` com history rewrite |
+| Lighthouse EPERM no Windows | try/catch em `chrome.kill()` |
+| pptxgenjs module not found | npm init + npm install em docs/ |
+| Mutation em options do pptxgenjs | Factory `makeShadow()` por chamada |
+| TypeScript jest types conflict | Removido do tsconfig types array |
 
 ---
 
 ## Metrics Reference
 
 ### API Metrics
-- **P50/P95/P99** — Response time percentiles
-- **Throughput** — Requests per second
-- **Error Rate** — % of failed requests
+- **P50/P95/P99** — percentis de tempo de resposta
+- **Throughput** — req/seg
+- **Error Rate** — % de falhas
 
 ### Core Web Vitals (Lighthouse)
 - **FCP** — First Contentful Paint (< 1.8s)
@@ -229,5 +223,5 @@ performance-testing-poc/
 
 ---
 
-**Last updated**: 2026-04-16  
-**Ready for**: Cursor IDE + corporate account migration
+**Last updated**: 2026-04-27  
+**Ready for**: presentation prep + corporate demos (compliance-clean)

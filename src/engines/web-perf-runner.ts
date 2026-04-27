@@ -17,6 +17,8 @@ export interface WebPerfEntry {
 export interface WebPerfSessionSummaryV1 {
   version: 1;
   createdAt: string;
+  resolvedUrls: string[];
+  discoveryLog?: string;
   entries: Array<{
     url: string;
     profileKey: string;
@@ -25,6 +27,10 @@ export interface WebPerfSessionSummaryV1 {
     metrics: LighthouseResult['metrics'];
     runs: number;
     aggregation: string;
+    opportunities: string[];
+    diagnostics: string[];
+    labContext: string;
+    runMetrics?: LighthouseResult['metrics'][];
   }>;
 }
 
@@ -143,6 +149,8 @@ export async function runWebPerfSession(plan: WebPerfPlan, baseResultsDir: strin
   const summary: WebPerfSessionSummaryV1 = {
     version: 1,
     createdAt: new Date().toISOString(),
+    resolvedUrls,
+    discoveryLog,
     entries: entries.map((e) => ({
       url: e.url,
       profileKey: e.profileKey,
@@ -151,6 +159,10 @@ export async function runWebPerfSession(plan: WebPerfPlan, baseResultsDir: strin
       metrics: e.result.metrics,
       runs: e.result.runs,
       aggregation: e.result.aggregation,
+      opportunities: e.result.opportunities,
+      diagnostics: e.result.diagnostics,
+      labContext: e.result.labContext,
+      runMetrics: e.result.runMetrics,
     })),
   };
 

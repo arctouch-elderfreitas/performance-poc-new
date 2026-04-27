@@ -22,7 +22,7 @@ Além disso oferece:
 
 - Node.js 18+
 - Google Chrome instalado (para testes de webpage com Lighthouse)
-- Chave de API do Groq — gratuita em [console.groq.com](https://console.groq.com)
+- Cursor IDE — a análise IA roda dentro do agente do Cursor (sem chaves de API externas)
 
 ---
 
@@ -30,8 +30,8 @@ Além disso oferece:
 
 ```bash
 # 1. Clonar o repositório
-git clone https://github.com/arctouch-elderfreitas/performance-poc.git
-cd performance-poc
+git clone https://github.com/arctouch-elderfreitas/performance-poc-new.git
+cd performance-poc-new
 
 # 2. Instalar dependências do framework
 npm install
@@ -41,19 +41,18 @@ cd api && npm install && cd ..
 
 # 4. Criar o arquivo de ambiente
 cp .env.example .env
-# Edite .env e adicione sua GROQ_API_KEY
+# Edite .env apenas se precisar mudar TARGET_API_URL ou outros overrides
 ```
 
 ---
 
 ## Configuração
 
-### `.env` — o que você precisa preencher
+### `.env` — o que você pode preencher
 
-Copie `.env.example` para `.env`:
+Copie `.env.example` para `.env`. **Nenhuma chave de API externa é necessária** — toda análise IA acontece dentro do Cursor.
 
 ```env
-GROQ_API_KEY=gsk_...                # chave gratuita em console.groq.com
 TARGET_API_URL=http://localhost:3000 # usado pelos exemplos de API
 ```
 
@@ -84,14 +83,14 @@ Este arquivo é a fonte única de verdade para URLs, perfis, runs, aggregation e
 
 **Para mudar a URL/páginas testadas, edite apenas esse arquivo.** Commit → todo mundo usa o novo plano.
 
-### Escape hatches (CI / monitoring / testes pontuais)
+### Escape hatches (testes pontuais)
 
-Se precisar **sobrescrever** o JSON sem editá-lo (ex: CI rodando em staging, uma investigação rápida em outra URL), use variáveis de ambiente listadas em `.env.example`:
+Se precisar **sobrescrever** o JSON sem editá-lo (ex: investigação rápida em outra URL), use variáveis de ambiente listadas em `.env.example`:
 
 - `TARGET_WEB_URL` / `TARGET_WEB_URLS` — sobrescreve a lista de URLs
 - `WEB_PERF_CONFIG` — aponta para outro JSON (ex: `plans/staging.json`)
 - `LIGHTHOUSE_RUNS`, `LIGHTHOUSE_AGGREGATION`, `LIGHTHOUSE_SAVE_HTML` — overrides por execução
-- `WEB_PERF_STRICT`, `WEB_PERF_MAX_LCP_MS`, ... — thresholds de CI
+- `WEB_PERF_STRICT`, `WEB_PERF_MAX_LCP_MS`, ... — thresholds de validação
 - `WEB_PERF_BASELINE_PATH`, `WEB_PERF_FAIL_ON_BASELINE_REGRESSION`, `WEB_PERF_REGRESSION_TOLERANCE_PCT` — regressão
 
 Exemplo de uso pontual:
@@ -132,7 +131,7 @@ npm run example:webpage   # Lighthouse em página web
 |---|---|---|
 | `example:simple` | `01-simple-get.perf.ts` | GET em `/users/1` — 50 iterações, métricas básicas |
 | `example:load` | `02-load-test.perf.ts` | Carga paralela em múltiplos endpoints |
-| `example:ai` | `03-ai-generated-test.perf.ts` | IA gera a config do teste + analisa resultado |
+| `example:ai` | `03-ai-generated-test.perf.ts` | Config padrão + análise pelo Cursor agent |
 | `example:chaos` | `04-chaos-test.perf.ts` | 4 cenários: baseline, latência, erros, combinado |
 | `example:public` | `05-public-api-test.perf.ts` | JSONPlaceholder (internet) vs API local |
 | `example:webpage` | `06-webpage-test.perf.ts` | Lighthouse: URLs × perfis, mediana, artefatos, baseline, descoberta via sitemap, análise cross-URL, relatório HTML consolidado |
@@ -208,12 +207,29 @@ Ao adicionar `discover` em `tests/config/web-perf.json`, o framework busca o `si
 }
 ```
 
-### Análise IA em dois níveis
+### Análise IA em dois níveis (via Cursor agent)
 
-Ao final da sessão, o framework envia para a IA:
+Ao final da sessão, o framework prepara dois prompts em `pending-analysis/`:
 
-1. **Análise da sessão inteira** — identifica padrões cross-URL (ex: "Unused JS em 6/8 páginas → problema de bundle, não de página").
-2. **Análise do pior cenário** — diagnóstico detalhado da URL × perfil com menor score.
+1. **`web-session-prompt.md`** — análise da sessão inteira (padrões cross-URL).
+2. **`web-worst-prompt.md`** — diagnóstico detalhado do pior cenário individual.
+
+Para gerar a análise:
+
+```bash
+# 1. Abra o chat do Cursor e peça:
+#    "Analise results/web-perf/<timestamp>/pending-analysis/web-session-prompt.md
+#     e em seguida web-worst-prompt.md"
+#
+# 2. O agente salva os outputs em:
+#    pending-analysis/web-session-output.json
+#    pending-analysis/web-worst-output.json
+#
+# 3. Aplique a análise no relatório consolidado:
+npm run analysis:apply -- results/web-perf/<timestamp>
+```
+
+O HTML final (`session-report.html`) inclui o bloco "Análise por IA" com summary, issues, recomendações e próximos passos. Nenhum dado deixa sua máquina — toda inferência roda dentro do Cursor.
 
 ### Comparação com baseline
 
@@ -224,13 +240,13 @@ cp results/web-perf/<timestamp>/session-summary.json tests/config/web-perf.basel
 # 2. Rodar com comparação ativada
 WEB_PERF_BASELINE_PATH=tests/config/web-perf.baseline.json npm run example:webpage
 
-# 3. Falhar o processo se houver regressão (útil em CI)
+# 3. Falhar o processo se houver regressão
 WEB_PERF_BASELINE_PATH=tests/config/web-perf.baseline.json \
 WEB_PERF_FAIL_ON_BASELINE_REGRESSION=1 \
 npm run example:webpage
 ```
 
-### Thresholds estritos (CI)
+### Thresholds estritos
 
 ```bash
 WEB_PERF_STRICT=1 \
@@ -302,27 +318,6 @@ O exemplo roda o Lighthouse em `http://localhost:3000/demo/` duas vezes: **sem**
 
 ---
 
-## CI/CD — GitHub Actions
-
-O workflow `.github/workflows/web-perf.yml` roda automaticamente em:
-
-- **push** / **pull_request** com mudanças em `src/` ou na config
-- **cron** diário (09:00 BRT, segunda a sexta) — monitoramento sintético
-- **workflow_dispatch** — execução manual com URL customizada
-
-Artefatos da sessão (`session-report.html`, LHRs, JSONs) são anexados ao run do Actions. Em PRs, o resumo vira comentário com a tabela de métricas de todas as URLs.
-
-Variáveis esperadas em `Settings → Secrets and variables`:
-
-| Nome | Tipo | Descrição |
-|---|---|---|
-| `GROQ_API_KEY` | Secret | Análise IA no pipeline |
-| `WEB_PERF_BASELINE_PATH` | Variable | Caminho do baseline versionado |
-| `WEB_PERF_STRICT` | Variable | `1` para bloquear merge se thresholds falharem |
-| `WEB_PERF_MIN_SCORE`, `WEB_PERF_MAX_LCP_MS`, ... | Variable | Thresholds por métrica |
-
----
-
 ## API Mock
 
 Simula um sistema CRUD com usuários, produtos e pedidos. O **chaos middleware** permite injetar latência e erros dinamicamente via HTTP:
@@ -351,19 +346,29 @@ GET                  /demo/                 # Página HTML que consome /products
 
 ---
 
-## Integração com IA
+## Integração com IA — Cursor agent
 
-O framework tenta as seguintes APIs em ordem, usando a primeira disponível:
+Em vez de chamar provedores LLM externos (Groq, Gemini, OpenAI, Anthropic), o framework delega a análise ao **agente do Cursor IDE** que você já tem aberto. Isso atende à política corporativa que proíbe envio de dados para serviços de terceiros.
 
-| Prioridade | Provedor | Variável | Custo |
-|---|---|---|---|
-| 1 | **Groq** (llama-3.1-8b-instant) | `GROQ_API_KEY` | Gratuito |
-| 2 | **Google Gemini** (gemini-1.5-flash-8b) | `GEMINI_API_KEY` | Gratuito com limites |
-| 3 | **Anthropic Claude** (claude-3-5-sonnet) | `ANTHROPIC_API_KEY` | Pago |
+**Fluxo em 3 etapas:**
 
-Se nenhuma chave estiver configurada, o framework usa análise baseada em regras (sem IA).
+1. **Script roda o teste** e salva um arquivo `*-prompt.md` em `pending-analysis/`. Esse arquivo contém:
+   - O prompt completo (com contexto de emulação de rede para Lighthouse)
+   - As instruções de formato de saída (JSON)
+   - O caminho onde o agente deve salvar o output
+2. **Você pede ao agente do Cursor**: `"Analise <caminho-do-prompt>"`. O agente lê o prompt, gera a análise estruturada e salva como `*-output.json`.
+3. **(Apenas web-perf)** Você roda `npm run analysis:apply -- <session-dir>` para fundir a análise no `session-report.html`.
 
-A análise do Lighthouse inclui **contexto de emulação de rede** no prompt, garantindo que o modelo não compare métricas de mobile 3G com desktop broadband usando os mesmos critérios.
+Vantagens:
+
+- Zero chave de API — sem custo, sem governança extra
+- Os dados de teste **nunca saem da sua máquina**
+- O modelo do Cursor (Opus, Sonnet etc.) é mais robusto que llama-3.1-8b-instant
+- Os prompts continuam versionados em `pending-analysis/` para auditoria
+
+Trade-off: a análise não é mais 100% headless dentro de um único `npm run`. É um passo manual a mais para invocar o agente.
+
+Se nenhuma análise IA for produzida, o framework cai automaticamente em uma análise **baseada em regras** (thresholds de Web Vitals e SLA), garantindo que o relatório nunca fique vazio.
 
 ---
 
@@ -382,7 +387,7 @@ performance-poc/
 │   ├── generators/
 │   │   └── test-generator.ts        # Gera configurações de teste via IA
 │   ├── parsers/
-│   │   └── result-parser.ts         # Análise IA de sessão + cenário individual
+│   │   └── result-parser.ts         # Salva prompts para o agente Cursor + fallback por regras
 │   └── utils/
 │       ├── http-client.ts           # Executa requisições HTTP com timing
 │       ├── metrics-processor.ts     # Calcula P50/P95/P99 e throughput
@@ -406,8 +411,8 @@ performance-poc/
 │       ├── web-perf.json                      # Plano de execução Lighthouse
 │       └── web-perf.baseline.example.json     # Modelo de baseline para CI
 │
-├── .github/workflows/
-│   └── web-perf.yml                   # CI/CD: roda Lighthouse em PRs/cron
+├── scripts/
+│   └── apply-analysis.ts              # Aplica output IA do agente Cursor no session-report.html
 │
 ├── api/                               # API mock Express (porta 3000)
 │   ├── public/demo/                   # Página HTML que consome /products
@@ -439,8 +444,8 @@ performance-poc/
 |---|---|
 | ✅ | Engine HTTP com P50/P95/P99, throughput, error rate |
 | ✅ | API mock com chaos middleware dinâmico |
-| ✅ | Análise de resultados via IA (Groq + fallback) |
-| ✅ | Geração de configs de teste via IA |
+| ✅ | Análise de resultados via Cursor agent + fallback por regras |
+| ✅ | Geração de configs de teste padrão (variações via Cursor agent) |
 | ✅ | Testes de webpage com Lighthouse v9 |
 | ✅ | Múltiplos runs com agregação por mediana |
 | ✅ | Múltiplas URLs × perfis em uma sessão |
@@ -451,7 +456,6 @@ performance-poc/
 | ✅ | Descoberta automática de URLs via sitemap (subdomínios/subpastas) |
 | ✅ | Análise IA da sessão inteira (padrões cross-URL) |
 | ✅ | Relatório HTML consolidado (`session-report.html`) |
-| ✅ | GitHub Actions workflow com cron + comentário em PR |
 | ✅ | Chaos × Web: API degradada vs métricas da página |
 | ✅ | Playwright para fluxos autenticados antes do Lighthouse |
 | ⬜ | OAuth / refresh tokens automáticos |
@@ -463,5 +467,5 @@ performance-poc/
 ---
 
 **Autor**: Elder Freitas — QA Analyst  
-**Repositório**: [github.com/arctouch-elderfreitas/performance-poc](https://github.com/arctouch-elderfreitas/performance-poc)  
-**Versão**: 0.3.0
+**Repositório**: [github.com/arctouch-elderfreitas/performance-poc-new](https://github.com/arctouch-elderfreitas/performance-poc-new)  
+**Versão**: 0.4.0

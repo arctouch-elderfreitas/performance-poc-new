@@ -24,10 +24,8 @@ dist/
 coverage/
 .nyc_output/
 
-# Results and logs
-results/*.json
-results/*.csv
-results/web-perf/
+# Results and logs (full results dir — includes pending-analysis prompts/outputs)
+results/
 *.log
 logs/
 

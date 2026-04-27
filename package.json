@@ -16,6 +16,7 @@
     "example:webpage": "ts-node tests/examples/06-webpage-test.perf.ts",
     "example:chaos-web": "ts-node tests/examples/07-chaos-web-test.perf.ts",
     "example:auth-webpage": "ts-node tests/examples/08-authenticated-webpage.perf.ts",
+    "analysis:apply": "ts-node scripts/apply-analysis.ts",
     "install:deps": "npm install --no-save axios dotenv"
   },
   "keywords": [

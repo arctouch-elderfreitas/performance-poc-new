@@ -1,15 +1,18 @@
 /**
- * AI-Generated Test Example
+ * Generated Test Example (default config + Cursor agent for variations)
  *
- * This example demonstrates:
- * - Using Claude to generate test requests
- * - Running generated tests
- * - Analyzing results with AI
+ * Histórico: este exemplo usava um provedor LLM externo para "gerar"
+ * variações da requisição. A política corporativa proíbe LLMs de terceiros,
+ * então a geração agora usa um template padrão. Para variações criativas,
+ * peça ao agente do Cursor diretamente no chat.
  *
  * Run with: ts-node tests/examples/03-ai-generated-test.perf.ts
  */
 
 import '../../src/config/env';
+import * as fs from 'fs';
+import * as path from 'path';
+import { config } from '../../src/config/env';
 import { httpEngine } from '../../src/engines/http-engine';
 import { testGenerator } from '../../src/generators/test-generator';
 import { resultParser } from '../../src/parsers/result-parser';
@@ -17,11 +20,10 @@ import { logger } from '../../src/utils/logger';
 
 async function runAiGeneratedTest() {
   try {
-    logger.title('AI-Generated Performance Test');
+    logger.title('Generated Performance Test (default config)');
 
-    // Step 1: Generate test request using Claude
-    logger.section('Step 1: Generating test request with AI');
-    logger.info('Using Claude to generate optimal test configuration...');
+    logger.section('Step 1: Generating default test request');
+    logger.info('Using built-in default template (no third-party LLM).');
 
     const generatedRequest = await testGenerator.generateTestRequest({
       apiEndpoint: 'http://localhost:3000/users/1',
@@ -48,19 +50,22 @@ async function runAiGeneratedTest() {
       requests: [generatedRequest],
     });
 
-    // Step 3: Analyze results
-    logger.section('Step 3: AI Analysis of Results');
-    logger.info('Analyzing performance metrics with Claude...');
+    logger.section('Step 3: Analysis of Results');
 
-    const analysis = await resultParser.analyzeResults(result.stats, {
-      scenario: 'load-test',
-      apiEndpoint: 'http://localhost:3000/users/1',
-    });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const sessionDir = path.join(config.resultsDir, 'api', `generated-${stamp}`);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const analysis = await resultParser.analyzeResults(
+      result.stats,
+      { scenario: 'load-test', apiEndpoint: 'http://localhost:3000/users/1' },
+      { outputDir: sessionDir }
+    );
 
     console.log(`\n📊 Analysis Summary:`);
     console.log(`${analysis.summary}\n`);
 
-    if (analysis.issues.length > 0) {
+    if (analysis.issues.length > 0 && analysis.issues[0] !== 'None detected') {
       console.log('⚠️  Identified Issues:');
       analysis.issues.forEach((issue, idx) => {
         console.log(`${idx + 1}. ${issue}`);
@@ -73,7 +78,12 @@ async function runAiGeneratedTest() {
       console.log(`${idx + 1}. ${rec}`);
     });
 
-    logger.success('AI-generated test completed!');
+    if (analysis.nextSteps.length > 0) {
+      console.log('\n📋 Next steps:');
+      analysis.nextSteps.forEach((s) => console.log(`   - ${s}`));
+    }
+
+    logger.success('Generated test completed!');
     process.exit(0);
   } catch (error) {
     logger.error('Test failed:', error);

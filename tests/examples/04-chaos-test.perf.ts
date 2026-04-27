@@ -11,7 +11,10 @@
  */
 
 import '../../src/config/env';
+import * as fs from 'fs';
 import * as http from 'http';
+import * as path from 'path';
+import { config } from '../../src/config/env';
 import { httpEngine } from '../../src/engines/http-engine';
 import { resultParser } from '../../src/parsers/result-parser';
 import { logger } from '../../src/utils/logger';
@@ -116,22 +119,38 @@ async function runChaosTest() {
     // Comparativo
     printComparison(results);
 
-    // Análise do pior cenário com IA
+    // Pior cenário: salvar contexto + prompt para análise pelo agente Cursor
     const worst = results.reduce((a, b) => a.stats.p95 > b.stats.p95 ? a : b);
-    logger.section(`Análise IA — Pior cenário: ${worst.label}`);
-    logger.info('Enviando para análise...');
-    const analysis = await resultParser.analyzeResults(worst.stats, {
-      scenario: 'chaos-test',
-      apiEndpoint: API_BASE,
-    });
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const sessionDir = path.join(config.resultsDir, 'api', `chaos-${stamp}`);
+    fs.mkdirSync(sessionDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sessionDir, 'comparativo.json'),
+      JSON.stringify(results.map((r) => ({ label: r.label, stats: r.stats })), null, 2),
+      'utf8'
+    );
+
+    logger.section(`Análise — Pior cenário: ${worst.label}`);
+    const analysis = await resultParser.analyzeResults(
+      worst.stats,
+      { scenario: 'chaos-test', apiEndpoint: API_BASE },
+      { outputDir: sessionDir }
+    );
 
     console.log(`\n📊 ${analysis.summary}\n`);
     if (analysis.issues[0] !== 'None detected') {
-      console.log('⚠️  Issues:');
+      console.log('⚠️  Issues (regras automatizadas):');
       analysis.issues.forEach((i) => console.log(`   - ${i}`));
     }
-    console.log('\n💡 Recomendações:');
-    analysis.recommendations.forEach((r) => console.log(`   - ${r}`));
+    if (analysis.recommendations.length > 0) {
+      console.log('\n💡 Recomendações:');
+      analysis.recommendations.forEach((r) => console.log(`   - ${r}`));
+    }
+    if (analysis.nextSteps.length > 0) {
+      console.log('\n📋 Próximos passos:');
+      analysis.nextSteps.forEach((s) => console.log(`   - ${s}`));
+    }
 
     logger.success('Chaos test concluído!');
     process.exit(0);

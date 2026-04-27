@@ -4,10 +4,10 @@ You are helping Elder Freitas (QA Analyst) continue work on a performance testin
 
 **IDP Goal**: Build AI-powered performance testing framework for QA team presentation (June 2026).
 
-**Current Status**: MVP complete. Ready for:
-- Cursor IDE migration
-- Corporate account integration
-- Enhanced features (CI/CD, auth, chaining)
+**Current Status**: MVP complete. Análise IA migrada para o agente do Cursor (sem LLMs externos). Pronto para:
+- Demonstrações para audiência corporativa
+- Adição de auth dinâmica e encadeamento de testes
+- Refinamento de prompts/análise
 
 **Key Resources**:
 - Full context: Read `IDP_CONTEXT.md` first
@@ -18,17 +18,18 @@ You are helping Elder Freitas (QA Analyst) continue work on a performance testin
 ## Tech Stack
 
 - **Runtime**: Node.js 18+ + TypeScript (CommonJS)
-- **IA**: Groq (free, llama-3.1-8b-instant)
+- **IA**: Cursor agent (Opus/Sonnet do próprio IDE) — sem chaves de API externas
 - **Load testing**: Custom HTTP engine + Lighthouse v9
 - **Mock API**: Express on port 3000 with chaos middleware
 - **Documentation**: Markdown + pptxgenjs
 
 ## Critical Setup
 
-Before running anything:
-1. Get Groq API key from console.groq.com (free)
-2. Add to `.env`: `GROQ_API_KEY=gsk_...`
-3. `npm install` (root) + `cd api && npm install`
+Antes de rodar:
+1. `npm install` (root) + `cd api && npm install`
+2. (Opcional) `cp .env.example .env` se precisar sobrescrever URLs
+
+Nada de chaves de API — o agente do Cursor já está aqui dentro.
 
 ## Running
 
@@ -43,18 +44,26 @@ npm run example:webpage   # Lighthouse test
 npm run example:public    # JSONPlaceholder vs local
 ```
 
+## Análise IA (workflow em 2 etapas)
+
+1. Script roda e salva prompt em `results/.../pending-analysis/<kind>-prompt.md`
+2. No chat do Cursor: `"Analise <caminho-do-prompt>"`
+3. Agente salva output como `<kind>-output.json`
+4. Para web-perf, rode: `npm run analysis:apply -- <session-dir>` para fundir no HTML
+
 ## Key Files
 
 - `src/` — Framework (engines, parsers, generators, utils)
-- `tests/examples/` — 6 working examples (all tested)
+- `scripts/apply-analysis.ts` — funde análise do agente no `session-report.html`
+- `tests/examples/` — 8 working examples
 - `api/` — Express mock server + chaos middleware
 - `docs/` — Notion article, slides outline, PPTX generator
 
 ## Common Tasks
 
-**Add new API test example**: Copy `tests/examples/01-simple-get.perf.ts`, update URL + test config.
+**Add new API test example**: Copy `tests/examples/01-simple-get.perf.ts`, update URL + test config. Pass `{ outputDir }` para `analyzeResults` se quiser análise IA via Cursor agent.
 
-**Tweak Groq analysis**: Edit prompts in `src/parsers/result-parser.ts` → `buildAnalysisPrompt()` / `buildLighthousePrompt()`.
+**Tweak prompts para o agente**: Edit prompts in `src/parsers/result-parser.ts` → `buildAnalysisPrompt()` / `buildSessionPrompt()` / `buildLighthousePrompt()`.
 
 **Web perf plan**: `tests/config/web-perf.json` + env (`TARGET_WEB_URL`, `LIGHTHOUSE_RUNS`, `WEB_PERF_STRICT`, `WEB_PERF_BASELINE_PATH`). Runner: `src/engines/web-perf-runner.ts`.
 
@@ -62,19 +71,34 @@ npm run example:public    # JSONPlaceholder vs local
 
 **Update PPTX slides**: Modify `docs/create-slides.js`, run `node create-slides.js`, check output `docs/Performance-Testing-com-IA.pptx`.
 
+## Quando o usuário pedir "Analise <prompt-path>"
+
+1. Leia o arquivo de prompt indicado
+2. Gere análise no formato JSON especificado:
+   ```json
+   {
+     "summary": "...",
+     "issues": ["..."],
+     "recommendations": ["..."],
+     "nextSteps": ["..."]
+   }
+   ```
+3. Salve em `<mesmo-diretório>/<kind>-output.json`
+4. Para `web-session` ou `web-worst`, rode `npm run analysis:apply -- <session-dir>` para atualizar o HTML
+
 ## Known Quirks
 
 - pptxgenjs mutates option objects in-place. Use factory functions for repeated props (e.g., `makeShadow()`).
-- All test examples must import `../../src/config/env` at top to load GROQ_API_KEY.
+- All test examples must import `../../src/config/env` at top.
 - Lighthouse EPERM on Windows: Already handled (try/catch around `chrome.kill()`).
-- Groq sometimes returns JSON in markdown code blocks. Parser handles it (multi-attempt: raw → sanitize → regex).
+- O parser trata respostas do agente com objetos aninhados via `flattenItem` — mas peça strings simples no prompt.
 
 ## Roadmap (v1.0)
 
 - [ ] OAuth / dynamic auth (refresh tokens)
 - [ ] Test chaining (result of A feeds B)
-- [ ] HTML report export
-- [ ] CI/CD integration with thresholds
+- [ ] Tendência entre sessões (gráfico de evolução)
+- [ ] Cruzamento com CrUX API (lab + field)
 - [ ] Advanced chaos patterns (jitter, partial timeouts)
 
 **Talk date**: June 27, 2026 (QA team, 1 hour, live demo + 15 slides).

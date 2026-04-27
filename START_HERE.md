@@ -1,198 +1,142 @@
-# 🚀 START HERE — Cursor Migration Guide
+# START HERE — Cursor IDE entry point
 
-You're reading this because you cloned this project into Cursor with your corporate account. Here's where to go next.
+Acabou de clonar o projeto no Cursor? Este é o roteiro mais curto para virar produtivo.
 
 ---
 
-## Context Files (Read in Order)
+## Context Files (leia nesta ordem)
 
-These files contain everything you need to understand the project:
+### 1. **IDP_CONTEXT.md** (5 min — comece aqui)
+Visão completa do projeto: o que está feito, o que falta, estrutura de arquivos, como rodar, fluxo de análise via Cursor agent.
 
-### 1. **IDP_CONTEXT.md** (START HERE — 5 min read)
-Complete project overview:
-- What's built ✅
-- What's pending ❌
-- File structure
-- How to run examples
-- Groq setup instructions
+### 2. **.cursorrules** (auto-carregado pelo Cursor)
+Resumo do tech stack + tarefas comuns + como me invocar para análise IA. **Não edite** a menos que queira mudar como o agente interpreta o projeto.
 
-**Read this first.** It's the full story.
+### 3. **CURSOR_SETUP.md** (5 min)
+Setup passo-a-passo no Cursor: clonar, dependências, primeira execução.
 
-### 2. **.cursorrules** (Auto-loaded by Cursor)
-Cursor automatically reads this file and uses it as project context in the sidebar.
-- Tech stack summary
-- Quick task reference
-- Known quirks
-- Setup checklist
-
-**Don't edit unless you want to change how Cursor interprets the project.**
-
-### 3. **CURSOR_SETUP.md** (5 min — for migration)
-Step-by-step setup for Cursor:
-- Clone & open
-- Environment setup (GROQ_API_KEY)
-- Dependencies
-- First run checklist
-- Corporate account integration notes
-
-**Follow this if you haven't run the project yet.**
-
-### 4. **SESSION_LOG.md** (10 min — optional, for context)
-Development timeline from day 1:
-- What was built in each session
-- Decisions made & why
-- Challenges solved
-- Current status
-
-**Read this to understand how we got here.**
+### 4. **SESSION_LOG.md** (opcional, 10 min)
+Timeline de desenvolvimento. Útil para entender por que algumas decisões foram tomadas.
 
 ---
 
 ## Quick Start (2 min)
 
 ```bash
-# 1. Create .env
-cat > .env << 'EOF'
-GROQ_API_KEY=gsk_<your-key-here>
-TARGET_API_URL=http://localhost:3000
-EOF
+# 1. (Opcional) .env apenas se quiser overrides
+cp .env.example .env
 
-# 2. Get your key from https://console.groq.com (free, 5 min)
-
-# 3. Install
+# 2. Install
 npm install
 cd api && npm install && cd ..
 
-# 4. Terminal 1: Mock API
+# 3. Terminal 1: Mock API
 cd api && npm run dev
 
-# 5. Terminal 2: Test
+# 4. Terminal 2: Test
 npm run example:simple
 ```
 
-If you see metrics + Groq analysis → **everything works**.
+Se você ver métricas no terminal → **tudo funcionando**. Nenhuma chave de API é necessária — toda análise IA acontece no chat do Cursor.
 
 ---
 
 ## Project Map
 
 ```
-📁 performance-testing-poc/
-├── 📄 IDP_CONTEXT.md          👈 MAIN REFERENCE (read first)
-├── 📄 CURSOR_SETUP.md         👈 Setup steps
-├── 📄 SESSION_LOG.md          👈 How we built this
-├── 📄 .cursorrules            👈 Auto-loaded by Cursor
-├── 📄 README.md               👈 Features + examples reference
+performance-poc-new/
+├── IDP_CONTEXT.md            👈 referência principal (leia primeiro)
+├── CURSOR_SETUP.md           👈 setup detalhado
+├── SESSION_LOG.md            👈 como o projeto foi construído
+├── .cursorrules              👈 auto-carregado pelo Cursor
+├── README.md                 👈 referência completa de features
 │
-├── 📁 src/                     Core framework
-│   ├── config/env.ts          Env vars
-│   ├── engines/               Load testing + Lighthouse
-│   ├── parsers/               AI analysis (Groq)
-│   ├── generators/            Test generation
-│   └── utils/                 Helpers
+├── src/                      framework
+│   ├── config/env.ts         env vars (sem chaves de IA)
+│   ├── engines/              load testing + Lighthouse
+│   ├── parsers/              salva prompts pro Cursor agent + fallback
+│   ├── generators/           geração de testes (template padrão)
+│   └── utils/                helpers
 │
-├── 📁 tests/examples/          6 working examples
+├── scripts/
+│   └── apply-analysis.ts     funde análise IA do agente no HTML
+│
+├── tests/examples/           8 exemplos prontos
 │   ├── 01-simple-get.perf.ts
 │   ├── 02-load-test.perf.ts
 │   ├── 03-ai-generated-test.perf.ts
-│   ├── 04-chaos-test.perf.ts       👈 Best demo
+│   ├── 04-chaos-test.perf.ts          👈 melhor demo
 │   ├── 05-public-api-test.perf.ts
-│   └── 06-webpage-test.perf.ts
+│   ├── 06-webpage-test.perf.ts        👈 Lighthouse
+│   ├── 07-chaos-web-test.perf.ts      👈 chaos × web
+│   └── 08-authenticated-webpage.perf.ts
 │
-├── 📁 api/                     Mock server (port 3000)
+├── api/                      mock server (porta 3000)
 │   └── src/
-│       ├── server.ts          Express + chaos middleware
+│       ├── server.ts         Express + chaos middleware
 │       ├── middleware/chaos.ts
 │       ├── routes/control.ts
 │       └── store/memory-store.ts
 │
-├── 📁 docs/                    Documentation
-│   ├── NOTION_ARTICLE.md       Article for publication
-│   ├── SLIDES_OUTLINE.md       Talk structure
-│   ├── create-slides.js        PPTX generator
-│   └── Performance-Testing-com-IA.pptx  👈 FINAL SLIDES
-│
-└── 📄 .env                     (Create this — add GROQ_API_KEY)
+└── docs/                     documentação
+    ├── NOTION_ARTICLE.md
+    ├── SLIDES_OUTLINE.md
+    ├── create-slides.js
+    └── Performance-Testing-com-IA.pptx 👈 SLIDES FINAIS
 ```
+
+---
+
+## Análise IA — workflow em 2 etapas
+
+1. Você roda um exemplo (ex: `npm run example:chaos`)
+2. O script salva um prompt em `results/.../pending-analysis/<kind>-prompt.md`
+3. **No chat do Cursor**: peça `"Analise <caminho-do-prompt>"`
+4. O agente do Cursor lê, analisa e salva como `<kind>-output.json`
+5. Para sessões web, em seguida rode: `npm run analysis:apply -- <session-dir>`
+
+Nada deixa sua máquina. Nenhuma chave de API. Modelo do Cursor (Opus/Sonnet) é mais robusto que LLMs gratuitos.
 
 ---
 
 ## Next Steps
 
-### Immediate
-- [ ] Create `.env` with GROQ_API_KEY
-- [ ] `npm install` in root + `cd api && npm install`
-- [ ] Run `npm run example:simple` to verify setup
+### Imediato
+- [ ] `npm install` em root + `cd api && npm install`
+- [ ] `npm run example:simple` para validar setup
+- [ ] Ler `IDP_CONTEXT.md`
 
-### For June 27 Talk
-- [ ] Review `docs/Performance-Testing-com-IA.pptx` (15 slides)
-- [ ] Run `npm run example:chaos` to see live demo
-- [ ] Practice: `npm run example:simple` → `npm run example:chaos` → `npm run example:webpage`
-- [ ] Prepare fallback screenshots (save outputs if internet might fail)
+### Para a talk de junho
+- [ ] Revisar `docs/Performance-Testing-com-IA.pptx` (15 slides)
+- [ ] Praticar: `simple` → `chaos` → análise no chat → `webpage` → `analysis:apply`
+- [ ] Capturar screenshots de fallback
 
-### Post-Talk (v1.0)
-- [ ] CI/CD integration (GitHub Actions)
-- [ ] OAuth / dynamic auth
-- [ ] HTML report export
-- [ ] Test chaining
+### Pós-talk (v1.0)
+- [ ] OAuth / refresh tokens automáticos
+- [ ] Encadeamento de testes (resultado de A alimenta B)
+- [ ] Tendência entre sessões (gráfico)
 
 ---
 
-## Common Questions
+## FAQ rápido
 
-**Q: Where do I find the slides for the talk?**  
-A: `docs/Performance-Testing-com-IA.pptx` — 15 slides, all done.
+**P: Onde estão os slides?**  
+R: `docs/Performance-Testing-com-IA.pptx`.
 
-**Q: How do I run the demo?**  
-A: Terminal 1: `cd api && npm run dev`. Terminal 2: `npm run example:chaos`.
+**P: Como rodar a demo principal?**  
+R: Terminal 1: `cd api && npm run dev`. Terminal 2: `npm run example:chaos`. Depois peça no chat: `"Analise o prompt em pending-analysis"`.
 
-**Q: I changed something. How do I update slides?**  
-A: Edit `docs/create-slides.js`, run `node create-slides.js` from docs/ folder.
+**P: Preciso de alguma chave de API?**  
+R: Não. A análise IA roda dentro do próprio Cursor (sem Groq, Gemini, OpenAI ou Anthropic).
 
-**Q: Where's my GROQ_API_KEY?**  
-A: Get free one at https://console.groq.com (5 min setup).
+**P: Como atualizo os slides?**  
+R: Edite `docs/create-slides.js`, rode `node create-slides.js` na pasta `docs/`.
 
-**Q: Can I run this with a different AI provider?**  
-A: Yes — edit `src/parsers/result-parser.ts`, add new provider to fallback chain.
-
-**Q: What if the mock API port 3000 is already taken?**  
-A: Kill process on 3000 or change port in `api/src/server.ts`.
+**P: Mock API na porta 3000 ocupada?**  
+R: Mate o processo: `lsof -i :3000` (macOS/Linux) e mate o PID.
 
 ---
 
-## Key Files to Modify
-
-If you need to:
-
-- **Change talk slides** → Edit `docs/create-slides.js`, run node command
-- **Add test example** → Copy `tests/examples/01-*.perf.ts`, modify URL/config
-- **Change AI analysis** → Edit `src/parsers/result-parser.ts` prompts
-- **Control chaos behavior** → Edit `api/src/middleware/chaos.ts` or POST to `/control/config`
-- **Update README** → Edit `README.md` (auto-synced when you commit)
-
----
-
-## Cursor Pro Tips
-
-1. **Open terminal split**: Terminal → New Terminal (run API + test side-by-side)
-2. **Search project**: Cmd+Shift+F (find all refs to "Groq", "chaos", etc)
-3. **AI assistant**: Use Cursor's built-in Claude to ask questions about code
-4. **Git integration**: Cursor has built-in git UI, push directly from editor
-5. **Define keyword shortcuts**: Add `.cursorrules` updates if you want custom behavior
-
----
-
-## You're All Set
-
-1. ✅ Read **IDP_CONTEXT.md**
-2. ✅ Follow **CURSOR_SETUP.md**
-3. ✅ Run first example
-4. ✅ Explore the code
-
-**Questions?** Check **IDP_CONTEXT.md** (full details), **SESSION_LOG.md** (how we built it), or look at working examples in `tests/examples/`.
-
----
-
-**Cloned on**: 2026-04-16  
-**Ready for**: Cursor IDE + corporate account  
+**Cloned on**: 2026-04-27  
+**Ready for**: presentation prep (compliance-clean, sem LLMs externos)  
 **Talk date**: June 27, 2026

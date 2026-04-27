@@ -1,4 +1,5 @@
-import * as https from 'https';
+import * as fs from 'fs';
+import * as path from 'path';
 import { logger } from '../utils/logger';
 import { PerformanceStats } from '../utils/metrics-processor';
 import { LighthouseResult } from '../engines/lighthouse-engine';
@@ -10,115 +11,176 @@ export interface AnalysisInsight {
   nextSteps: string[];
 }
 
+export type AnalysisKind = 'api-test' | 'web-session' | 'web-worst';
+
+export interface AnalyzeOptions {
+  /**
+   * Directory where the prompt for the Cursor agent will be saved.
+   * If not provided, only the rules-based fallback analysis is returned.
+   */
+  outputDir?: string;
+}
+
+export interface SessionEntry {
+  url: string;
+  profileKey: string;
+  device: string;
+  throttling: string;
+  metrics: LighthouseResult['metrics'];
+  opportunities: string[];
+}
+
+const PENDING_DIR_NAME = 'pending-analysis';
+
 export class ResultParser {
   async analyzeResults(
     stats: PerformanceStats,
-    context?: { apiEndpoint?: string; scenario?: string }
+    context?: { apiEndpoint?: string; scenario?: string },
+    options?: AnalyzeOptions
   ): Promise<AnalysisInsight> {
-    logger.debug('Analyzing performance results with AI...');
-
-    const groqKey = process.env.GROQ_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    logger.debug('Preparing performance analysis prompt for Cursor agent...');
 
     const prompt = this.buildAnalysisPrompt(stats, context);
+    const ruleBased = this.getDefaultAnalysis(stats);
+    const kind: AnalysisKind = 'api-test';
 
-    if (groqKey) {
-      try {
-        logger.info('Using Groq AI for analysis...');
-        const responseText = await this.callGroqAPI(groqKey, prompt);
-        return this.parseAnalysisResponse(responseText);
-      } catch (error) {
-        logger.warn(`Groq analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
+    const promptPath = options?.outputDir
+      ? this.savePromptForAgent(prompt, kind, options.outputDir, { stats, context })
+      : undefined;
 
-    if (geminiKey) {
-      try {
-        logger.info('Using Gemini AI for analysis...');
-        const responseText = await this.callGeminiAPI(geminiKey, prompt);
-        return this.parseAnalysisResponse(responseText);
-      } catch (error) {
-        logger.warn(`Gemini analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    if (anthropicKey) {
-      try {
-        logger.info('Using Anthropic Claude for analysis...');
-        const responseText = await this.callAnthropicAPI(anthropicKey, prompt);
-        return this.parseAnalysisResponse(responseText);
-      } catch (error) {
-        logger.warn(`Anthropic analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    if (!groqKey && !geminiKey && !anthropicKey) {
-      logger.warn('No AI API key set (GROQ_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY). Using default analysis.');
-    }
-
-    return this.getDefaultAnalysis(stats);
+    return this.composeInsightWithAgentHint(ruleBased, promptPath);
   }
 
   async analyzeSession(
-    entries: Array<{
-      url: string;
-      profileKey: string;
-      device: string;
-      throttling: string;
-      metrics: LighthouseResult['metrics'];
-      opportunities: string[];
-    }>
+    entries: SessionEntry[],
+    options?: AnalyzeOptions
   ): Promise<AnalysisInsight> {
-    const groqKey = process.env.GROQ_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
-
     const prompt = this.buildSessionPrompt(entries);
+    const ruleBased = this.getDefaultSessionAnalysis(entries);
+    const kind: AnalysisKind = 'web-session';
 
-    if (groqKey) {
-      try {
-        logger.info('Using Groq AI for session analysis...');
-        const responseText = await this.callGroqAPI(groqKey, prompt);
-        return this.parseAnalysisResponse(responseText);
-      } catch (error) {
-        logger.warn(`Groq session analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
+    const promptPath = options?.outputDir
+      ? this.savePromptForAgent(prompt, kind, options.outputDir, { entries })
+      : undefined;
 
-    if (geminiKey) {
-      try {
-        logger.info('Using Gemini AI for session analysis...');
-        const responseText = await this.callGeminiAPI(geminiKey, prompt);
-        return this.parseAnalysisResponse(responseText);
-      } catch (error) {
-        logger.warn(`Gemini session analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    if (anthropicKey) {
-      try {
-        logger.info('Using Anthropic Claude for session analysis...');
-        const responseText = await this.callAnthropicAPI(anthropicKey, prompt);
-        return this.parseAnalysisResponse(responseText);
-      } catch (error) {
-        logger.warn(`Anthropic session analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    return this.getDefaultSessionAnalysis(entries);
+    return this.composeInsightWithAgentHint(ruleBased, promptPath);
   }
 
-  private buildSessionPrompt(
-    entries: Array<{
-      url: string;
-      profileKey: string;
-      device: string;
-      throttling: string;
-      metrics: LighthouseResult['metrics'];
-      opportunities: string[];
-    }>
+  async analyzeLighthouseResults(
+    result: LighthouseResult,
+    options?: AnalyzeOptions
+  ): Promise<AnalysisInsight> {
+    const prompt = this.buildLighthousePrompt(result);
+    const ruleBased = this.getDefaultLighthouseAnalysis(result);
+    const kind: AnalysisKind = 'web-worst';
+
+    const promptPath = options?.outputDir
+      ? this.savePromptForAgent(prompt, kind, options.outputDir, {
+          url: result.url,
+          profileKey: result.throttling,
+          metrics: result.metrics,
+        })
+      : undefined;
+
+    return this.composeInsightWithAgentHint(ruleBased, promptPath);
+  }
+
+  /**
+   * Apply an AnalysisInsight previously generated by the Cursor agent.
+   * Used by `scripts/apply-analysis.ts` to merge agent output into reports.
+   */
+  static loadAgentInsight(outputJsonPath: string): AnalysisInsight {
+    const raw = JSON.parse(fs.readFileSync(outputJsonPath, 'utf8'));
+    return new ResultParser().normalizeInsight(raw as AnalysisInsight);
+  }
+
+  private composeInsightWithAgentHint(
+    base: AnalysisInsight,
+    promptPath?: string
+  ): AnalysisInsight {
+    if (!promptPath) return base;
+    return {
+      ...base,
+      nextSteps: [
+        `🤖 Para análise IA detalhada via Cursor agent, peça no chat: "Analise ${promptPath}"`,
+        ...base.nextSteps,
+      ],
+    };
+  }
+
+  private savePromptForAgent(
+    prompt: string,
+    kind: AnalysisKind,
+    outputDir: string,
+    rawContext: unknown
   ): string {
+    const dir = path.join(outputDir, PENDING_DIR_NAME);
+    fs.mkdirSync(dir, { recursive: true });
+
+    const promptPath = path.join(dir, `${kind}-prompt.md`);
+    const outputPath = path.join(dir, `${kind}-output.json`);
+    const contextPath = path.join(dir, `${kind}-context.json`);
+
+    fs.writeFileSync(contextPath, JSON.stringify(rawContext, null, 2), 'utf8');
+
+    const document = this.formatPromptDocument(prompt, kind, outputPath);
+    fs.writeFileSync(promptPath, document, 'utf8');
+
+    return promptPath;
+  }
+
+  private formatPromptDocument(
+    prompt: string,
+    kind: AnalysisKind,
+    outputPath: string
+  ): string {
+    const friendlyKind: Record<AnalysisKind, string> = {
+      'api-test': 'API Performance Test',
+      'web-session': 'Web Performance Session (cross-URL)',
+      'web-worst': 'Web Performance — pior cenário individual',
+    };
+
+    return `# Análise IA pendente — ${friendlyKind[kind]}
+
+> **Instruções para o agente do Cursor**
+>
+> 1. Leia o prompt abaixo
+> 2. Gere uma análise estruturada no formato JSON especificado
+> 3. **Salve o resultado em**: \`${outputPath}\`
+> 4. Para sessões web (\`web-session\` ou \`web-worst\`), em seguida rode no terminal:
+>    \`\`\`bash
+>    npm run analysis:apply -- <session-dir>
+>    \`\`\`
+>    para atualizar o \`session-report.html\` com a análise.
+
+**Tipo:** \`${kind}\`
+**Gerado em:** ${new Date().toISOString()}
+**Output esperado em:** \`${outputPath}\`
+
+---
+
+## Prompt
+
+${prompt}
+
+---
+
+## Formato esperado da resposta (JSON)
+
+\`\`\`json
+{
+  "summary": "...",
+  "issues": ["..."],
+  "recommendations": ["..."],
+  "nextSteps": ["..."]
+}
+\`\`\`
+
+Cada item dos arrays \`issues\`, \`recommendations\` e \`nextSteps\` deve ser uma string simples, sem objetos aninhados.
+`;
+  }
+
+  private buildSessionPrompt(entries: SessionEntry[]): string {
     const rows = entries
       .map((e, i) => {
         const top = e.opportunities.slice(0, 3).join(' | ') || '(none)';
@@ -129,7 +191,7 @@ export class ResultParser {
     const byProfile = entries.reduce((acc, e) => {
       (acc[e.profileKey] ||= []).push(e);
       return acc;
-    }, {} as Record<string, typeof entries>);
+    }, {} as Record<string, SessionEntry[]>);
 
     const profileSummary = Object.entries(byProfile)
       .map(([key, list]) => {
@@ -172,13 +234,7 @@ Every array item MUST be a plain string (no nested objects or sub-keys).
 }`;
   }
 
-  private getDefaultSessionAnalysis(
-    entries: Array<{
-      url: string;
-      metrics: LighthouseResult['metrics'];
-      opportunities: string[];
-    }>
-  ): AnalysisInsight {
+  private getDefaultSessionAnalysis(entries: SessionEntry[]): AnalysisInsight {
     const n = entries.length;
     const avgScore = Math.round(entries.reduce((acc, e) => acc + e.metrics.performanceScore, 0) / n);
     const highTtfb = entries.filter((e) => e.metrics.ttfbMs > 600).length;
@@ -189,51 +245,11 @@ Every array item MUST be a plain string (no nested objects or sub-keys).
     if (highLcp > n / 2) issues.push(`LCP > 4000ms em ${highLcp}/${n} páginas — conteúdo principal lento`);
 
     return {
-      summary: `Sessão com ${n} cenário(s), score médio ${avgScore}/100.`,
-      issues: issues.length ? issues : ['Sem padrões críticos detectados entre as páginas'],
-      recommendations: ['Configure GROQ_API_KEY para análise cross-URL com IA'],
+      summary: `Sessão com ${n} cenário(s), score médio ${avgScore}/100. Análise rápida via regras (sem IA).`,
+      issues: issues.length ? issues : ['Sem padrões críticos detectados pelas regras automatizadas'],
+      recommendations: ['Consulte o agente Cursor para análise cross-URL detalhada'],
       nextSteps: ['Repita a sessão após a próxima build para comparar'],
     };
-  }
-
-  async analyzeLighthouseResults(result: LighthouseResult): Promise<AnalysisInsight> {
-    const groqKey = process.env.GROQ_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
-
-    const prompt = this.buildLighthousePrompt(result);
-
-    if (groqKey) {
-      try {
-        logger.info('Using Groq AI for Lighthouse analysis...');
-        const responseText = await this.callGroqAPI(groqKey, prompt);
-        return this.parseAnalysisResponse(responseText);
-      } catch (error) {
-        logger.warn(`Groq analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    if (geminiKey) {
-      try {
-        logger.info('Using Gemini AI for Lighthouse analysis...');
-        const responseText = await this.callGeminiAPI(geminiKey, prompt);
-        return this.parseAnalysisResponse(responseText);
-      } catch (error) {
-        logger.warn(`Gemini analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    if (anthropicKey) {
-      try {
-        logger.info('Using Anthropic Claude for Lighthouse analysis...');
-        const responseText = await this.callAnthropicAPI(anthropicKey, prompt);
-        return this.parseAnalysisResponse(responseText);
-      } catch (error) {
-        logger.warn(`Anthropic analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    return this.getDefaultLighthouseAnalysis(result);
   }
 
   private buildLighthousePrompt(result: LighthouseResult): string {
@@ -311,7 +327,7 @@ Every array item MUST be a plain string (no nested objects or sub-keys).
     if (result.opportunities.length > 0) recommendations.push(...result.opportunities.slice(0, 3).map((o) => `Fix: ${o}`));
 
     return {
-      summary: `Performance score: ${metrics.performanceScore}/100. LCP: ${metrics.lcpMs}ms, TBT: ${metrics.tbtMs}ms, CLS: ${metrics.cls}.`,
+      summary: `Performance score: ${metrics.performanceScore}/100. LCP: ${metrics.lcpMs}ms, TBT: ${metrics.tbtMs}ms, CLS: ${metrics.cls}. Análise rápida via regras (sem IA).`,
       issues: issues.length > 0 ? issues : ['No critical issues detected'],
       recommendations: recommendations.length > 0 ? recommendations : ['Performance is within acceptable thresholds'],
       nextSteps: ['Run tests on mobile and desktop separately', 'Compare results after each optimization', 'Monitor Core Web Vitals in production'],
@@ -324,7 +340,6 @@ Every array item MUST be a plain string (no nested objects or sub-keys).
 
     const obj = item as Record<string, unknown>;
 
-    // Prefer explicit prose fields first
     const prose =
       obj['description'] ??
       obj['text'] ??
@@ -359,7 +374,6 @@ Every array item MUST be a plain string (no nested objects or sub-keys).
 
     if (parts.length > 0) return parts.join(' ');
 
-    // Last resort: join all non-empty string values
     return Object.values(obj)
       .filter((v) => typeof v === 'string' && v.trim())
       .join(' — ');
@@ -376,60 +390,6 @@ Every array item MUST be a plain string (no nested objects or sub-keys).
       recommendations: toStringArray(raw.recommendations),
       nextSteps:       toStringArray(raw.nextSteps),
     };
-  }
-
-  private parseAnalysisResponse(responseText: string): AnalysisInsight {
-    const stripped = responseText
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/g, '')
-      .trim();
-
-    const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error(`Could not find JSON in AI response: ${responseText.slice(0, 200)}`);
-    }
-
-    // Attempt 1: parse as-is
-    try {
-      const analysis = JSON.parse(jsonMatch[0]) as AnalysisInsight;
-      logger.success('AI Analysis completed');
-      return this.normalizeInsight(analysis);
-    } catch { /* continue */ }
-
-    // Attempt 2: sanitize control characters inside string values
-    try {
-      const sanitized = jsonMatch[0].replace(
-        /"((?:[^"\\]|\\.)*)"/g,
-        (_match, content: string) =>
-          `"${content.replace(/[\n\r\t]/g, ' ').replace(/[\x00-\x1F\x7F]/g, '')}"`
-      );
-      const analysis = JSON.parse(sanitized) as AnalysisInsight;
-      logger.success('AI Analysis completed');
-      return this.normalizeInsight(analysis);
-    } catch { /* continue */ }
-
-    // Attempt 3: extract fields via regex (last resort)
-    const extract = (key: string): string => {
-      const m = stripped.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*?)"`));
-      return m ? m[1] : '';
-    };
-    const extractArray = (key: string): string[] => {
-      const block = stripped.match(new RegExp(`"${key}"\\s*:\\s*\\[([\\s\\S]*?)\\]`));
-      if (!block) return [];
-      return [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    };
-
-    const analysis: AnalysisInsight = {
-      summary:         extract('summary'),
-      issues:          extractArray('issues'),
-      recommendations: extractArray('recommendations'),
-      nextSteps:       extractArray('nextSteps'),
-    };
-
-    if (!analysis.summary) throw new Error(`Failed to extract fields from AI response: ${stripped.slice(0, 200)}`);
-
-    logger.success('AI Analysis completed (extracted via regex)');
-    return analysis;
   }
 
   private getDefaultAnalysis(stats: PerformanceStats): AnalysisInsight {
@@ -462,143 +422,7 @@ Every array item MUST be a plain string (no nested objects or sub-keys).
     };
   }
 
-  private callGroqAPI(apiKey: string, prompt: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const data = JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        max_tokens: 1500,
-        messages: [{ role: 'user', content: prompt }],
-      });
-
-      const options = {
-        hostname: 'api.groq.com',
-        path: '/openai/v1/chat/completions',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(data),
-          'Authorization': `Bearer ${apiKey}`,
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let responseData = '';
-        res.on('data', (chunk) => { responseData += chunk; });
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(responseData);
-            const text = parsed?.choices?.[0]?.message?.content;
-            if (text) {
-              resolve(text);
-            } else {
-              reject(new Error(`Groq API error ${res.statusCode}: ${JSON.stringify(parsed)}`));
-            }
-          } catch (e) {
-            reject(new Error(`Failed to parse Groq response: ${responseData}`));
-          }
-        });
-      });
-
-      req.on('error', reject);
-      req.write(data);
-      req.end();
-    });
-  }
-
-  private callGeminiAPI(apiKey: string, prompt: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const data = JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 1500, temperature: 0.3 },
-      });
-
-      const options = {
-        hostname: 'generativelanguage.googleapis.com',
-        path: `/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${apiKey}`,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(data),
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let responseData = '';
-        res.on('data', (chunk) => { responseData += chunk; });
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(responseData);
-            const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              resolve(text);
-            } else {
-              reject(new Error(`Gemini API error ${res.statusCode}: ${JSON.stringify(parsed)}`));
-            }
-          } catch (e) {
-            reject(new Error(`Failed to parse Gemini response: ${responseData}`));
-          }
-        });
-      });
-
-      req.on('error', reject);
-      req.write(data);
-      req.end();
-    });
-  }
-
-  private callAnthropicAPI(apiKey: string, prompt: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const data = JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1500,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
-
-      const options = {
-        hostname: 'api.anthropic.com',
-        path: '/v1/messages',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(data),
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let responseData = '';
-
-        res.on('data', (chunk) => {
-          responseData += chunk;
-        });
-
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(responseData);
-            if (parsed.content && parsed.content[0] && parsed.content[0].text) {
-              resolve(parsed.content[0].text);
-            } else {
-              reject(new Error(`API error ${res.statusCode}: ${JSON.stringify(parsed)}`));
-            }
-          } catch (e) {
-            reject(new Error(`Failed to parse response: ${responseData}`));
-          }
-        });
-      });
-
-      req.on('error', reject);
-      req.write(data);
-      req.end();
-    });
-  }
-
-  private buildAnalysisPrompt(stats: PerformanceStats, context?: any): string {
+  private buildAnalysisPrompt(stats: PerformanceStats, context?: { apiEndpoint?: string; scenario?: string }): string {
     return `You are a performance testing expert. Analyze the following performance test results and provide actionable insights.
 
 Test Results:

@@ -1,4 +1,3 @@
-// Load .env file manually if it exists
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -11,7 +10,6 @@ function loadEnvFile(): void {
       const lines = envContent.split('\n');
 
       for (const line of lines) {
-        // Skip comments and empty lines
         if (line.startsWith('#') || line.trim() === '') {
           continue;
         }
@@ -19,10 +17,8 @@ function loadEnvFile(): void {
         const [key, ...valueParts] = line.split('=');
         const value = valueParts.join('=').trim();
 
-        // Remove quotes if present
         const cleanValue = value.replace(/^["']|["']$/g, '');
 
-        // Only set if not already in process.env
         if (key && !process.env[key.trim()]) {
           process.env[key.trim()] = cleanValue;
         }
@@ -36,15 +32,6 @@ function loadEnvFile(): void {
 loadEnvFile();
 
 export const config = {
-  // Anthropic API
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
-
-  // Google Gemini API
-  geminiApiKey: process.env.GEMINI_API_KEY || '',
-
-  // Groq API
-  groqApiKey: process.env.GROQ_API_KEY || '',
-
   // Target API
   targetApiUrl: process.env.TARGET_API_URL || 'https://jsonplaceholder.typicode.com',
   targetApiTimeoutMs: parseInt(process.env.TARGET_API_TIMEOUT_MS || '10000', 10),
@@ -59,12 +46,4 @@ export const config = {
 
   // Output
   resultsDir: process.env.RESULTS_DIR || './results',
-
-  // Validation
-  validate(): void {
-    if (!this.anthropicApiKey) {
-      console.warn('⚠️  ANTHROPIC_API_KEY is not set. AI features will be disabled.');
-      console.warn('   Set it in .env file or as environment variable.');
-    }
-  },
 };

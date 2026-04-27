@@ -200,7 +200,7 @@ async function runWebpageTest() {
     };
 
     if (session.entries.length > 1) {
-      logger.info('\nAnalisando sessão inteira (padrões cross-URL)...');
+      logger.info('\nPreparando análise de sessão (cross-URL)...');
       sessionAnalysis = await resultParser.analyzeSession(
         session.entries.map((e) => ({
           url: e.url,
@@ -209,15 +209,19 @@ async function runWebpageTest() {
           throttling: e.throttling,
           metrics: e.result.metrics,
           opportunities: e.result.opportunities,
-        }))
+        })),
+        { outputDir: session.sessionDir }
       );
-      printInsight('Análise IA — Sessão completa', '', sessionAnalysis);
+      printInsight('Análise — Sessão completa', '', sessionAnalysis);
     }
 
     worstResult = pickWorstForAnalysis(session.entries);
-    logger.info('\nAnalisando pior cenário individual...');
-    worstAnalysis = await resultParser.analyzeLighthouseResults(worstResult);
-    printInsight('Análise IA — pior cenário', ` (${worstResult.metrics.performanceScore}/100)`, worstAnalysis);
+    logger.info('\nPreparando análise do pior cenário individual...');
+    worstAnalysis = await resultParser.analyzeLighthouseResults(
+      worstResult,
+      { outputDir: session.sessionDir }
+    );
+    printInsight('Análise — pior cenário', ` (${worstResult.metrics.performanceScore}/100)`, worstAnalysis);
 
     // Reescrever o HTML consolidado com análise IA + baseline + thresholds
     const worstEntry = session.entries.find((e) => e.result === worstResult);

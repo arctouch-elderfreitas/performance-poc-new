@@ -1,53 +1,46 @@
 # Cursor Setup Guide
 
-Migration from Claude Code to Cursor IDE with corporate account.
+Guia rápido de setup do projeto no Cursor IDE (conta corporativa).
 
 ---
 
 ## Step 1: Clone & Open in Cursor
 
 ```bash
-git clone <repo-url> performance-testing-poc
-cd performance-testing-poc
+git clone https://github.com/arctouch-elderfreitas/performance-poc-new.git
+cd performance-poc-new
 cursor .
 ```
 
-Cursor will auto-detect `.cursorrules` and load context.
+O Cursor lê automaticamente o `.cursorrules` e carrega o contexto do projeto.
 
 ---
 
 ## Step 2: Environment Setup
 
-Create `.env` in project root:
+**Não é necessário criar `.env`** para a maioria dos casos. O projeto não usa chaves de API externas — toda análise IA roda dentro do agente do Cursor.
 
-```env
-GROQ_API_KEY=gsk_<your-key-here>
-TARGET_API_URL=http://localhost:3000
+Se quiser overrides pontuais (URL alternativa, thresholds estritos, etc.), copie o exemplo:
+
+```bash
+cp .env.example .env
 ```
 
-Get GROQ_API_KEY (free):
-1. Visit https://console.groq.com
-2. Sign up or log in
-3. Create API key
-4. Paste here
+E edite as variáveis comentadas conforme necessário.
 
 ---
 
 ## Step 3: Dependencies
 
 ```bash
-# Root
 npm install
-
-# Mock API
-cd api
-npm install
-cd ..
+cd api && npm install && cd ..
 ```
 
-Check Node version:
+Verifique a versão do Node:
+
 ```bash
-node --version  # Should be 18+
+node --version  # deve ser 18+
 ```
 
 ---
@@ -55,39 +48,48 @@ node --version  # Should be 18+
 ## Step 4: First Run
 
 Terminal 1 (Mock API):
+
 ```bash
-cd api
-npm run dev
-# Runs on http://localhost:3000
+cd api && npm run dev
+# Roda em http://localhost:3000
 ```
 
 Terminal 2 (Test):
+
 ```bash
 npm run example:simple
-# Should see metrics in ~5 seconds
-# Should see Groq analysis
+# Métricas em ~5 segundos
 ```
 
-If it works → project is ready.
+Se você ver as métricas no terminal → **tudo funcionando**.
 
 ---
 
-## Step 5: Corporate Account Integration (Optional)
+## Step 5: Análise IA via Cursor agent
 
-If your company uses custom Groq instance or different AI provider:
+Para gerar análise IA dos resultados:
 
-1. **Custom Groq endpoint**: Edit `src/parsers/result-parser.ts` → `callGroqAPI()` → change `api.groq.com` to your endpoint
-2. **Different AI provider**: Add new function (e.g., `callCorporateAI()`), update provider fallback chain
+1. Rode um exemplo que produza prompt (`example:chaos`, `example:webpage`, `example:ai`)
+2. O terminal mostrará algo como:
+   ```
+   🤖 Para análise IA detalhada via Cursor agent, peça no chat:
+      "Analise results/api/chaos-2026-04-27.../pending-analysis/api-test-prompt.md"
+   ```
+3. Abra o chat do Cursor (Cmd+L) e peça exatamente isso
+4. O agente lê o prompt, gera análise estruturada e salva como `<kind>-output.json`
+5. **Para sessões web**, em seguida rode:
+   ```bash
+   npm run analysis:apply -- results/web-perf/<timestamp>
+   ```
+   para fundir a análise no `session-report.html`
 
 ---
 
-## Cursor + Git Integration
-
-Cursor integrates with git. To push updates back:
+## Cursor + Git
 
 ```bash
 git add .
-git commit -m "Add corporate account setup"
+git commit -m "feat: <change>"
 git push origin main
 ```
 
@@ -96,13 +98,16 @@ git push origin main
 ## Talk Presentation (June 27, 2026)
 
 **Demo sequence** (20 min):
-1. `npm run example:simple` — Show basic metrics (2 min)
-2. `npm run example:chaos` — 4 scenarios comparison (8 min, leave running while you talk)
-3. `npm run example:webpage` — Lighthouse results (5 min)
 
-**Slides**: `docs/Performance-Testing-com-IA.pptx` (15 slides, all done)
+1. `npm run example:simple` — métricas básicas (2 min)
+2. `npm run example:chaos` — comparação de 4 cenários (5 min)
+3. **No chat do Cursor**: "Analise o prompt em pending-analysis" → mostrar análise (3 min)
+4. `npm run example:webpage` — Lighthouse (5 min)
+5. **No chat do Cursor**: analisar a sessão web → `npm run analysis:apply` → abrir HTML (5 min)
 
-**Fallback**: If internet dies, screenshots already captured in examples output.
+**Slides**: `docs/Performance-Testing-com-IA.pptx` (15 slides).
+
+**Fallback**: Se algo falhar ao vivo, screenshots dos exemplos já estão em `results/`.
 
 ---
 
@@ -112,52 +117,38 @@ git push origin main
 |------|---------|
 | Run simple test | `npm run example:simple` |
 | Chaos engineering | `npm run example:chaos` |
-| Lighthouse test | `npm run example:webpage` |
-| Compare APIs | `npm run example:public` |
-| Regenerate slides | `cd docs && node create-slides.js` |
-| Kill mock API (port stuck) | `lsof -i :3000` (macOS/Linux) or `netstat -ano \| findstr :3000` (Windows) |
+| Lighthouse | `npm run example:webpage` |
+| Comparar APIs | `npm run example:public` |
+| Aplicar análise IA | `npm run analysis:apply -- <session-dir>` |
+| Regerar slides | `cd docs && node create-slides.js` |
+| Matar mock API | `lsof -i :3000` (macOS/Linux) |
 
 ---
 
 ## Troubleshooting
 
-**Q: "GROQ_API_KEY not found"**  
-A: Check `.env` is in root. Verify you added the key. Restart terminal.
+**P: "Port 3000 already in use"**  
+R: Mate o processo na 3000 ou rode em outra porta editando `api/src/server.ts`.
 
-**Q: "Port 3000 already in use"**  
-A: Kill previous API process: `npm run dev` on another PORT or kill the process.
+**P: "Chrome not found" (erro do Lighthouse)**  
+R: O Lighthouse precisa do Chrome instalado. Instale em google.com/chrome.
 
-**Q: "Chrome not found" (Lighthouse error)**  
-A: Lighthouse requires Chrome installed. Install from google.com/chrome.
+**P: "Module not found" (TypeScript)**  
+R: Rode `npm install` em root e em `api/`.
 
-**Q: "Groq JSON parse error"**  
-A: Normal — parser retries with sanitization. If persistent, check internet.
-
-**Q: "Module not found" (TypeScript error)**  
-A: Run `npm install` in both root and `api/` folders.
+**P: O agente do Cursor não está respondendo a "Analise X"**  
+R: Verifique se você abriu o chat do Cursor (Cmd+L) e se o caminho do arquivo está correto. O agente lê arquivos relativos ao workspace root.
 
 ---
 
 ## Next Development Steps
 
-After talk (post-June 27):
+Pós-talk (após 27 de junho):
 
-1. **CI/CD integration**: Add GitHub Actions workflow
-   - Run tests on PR
-   - Set performance thresholds
-   - Block merge if P95 > 500ms
-
-2. **OAuth support**:
-   - Add Bearer token + refresh logic
-   - Allow headers config in test generation
-
-3. **HTML reports**:
-   - Use pptxgenjs or custom template
-   - Export formatted results + charts
-
-4. **Test chaining**:
-   - Pass response data from test A → test B
-   - Extract IDs from payload, use in next request
+1. **OAuth / refresh tokens**: bearer + refresh logic, headers configuráveis
+2. **Test chaining**: passar resposta de teste A para teste B
+3. **Tendência entre sessões**: agregar `session-summary.json` ao longo do tempo
+4. **Cruzamento com CrUX**: combinar lab data (Lighthouse) com field data (Chrome UX Report)
 
 ---
 

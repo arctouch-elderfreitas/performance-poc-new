@@ -1,5 +1,3 @@
-import * as https from 'https';
-import { config } from '../config/env';
 import { logger } from '../utils/logger';
 import { RequestConfig } from '../utils/http-client';
 
@@ -11,42 +9,19 @@ export interface TestGenerationRequest {
   targetRPS?: number;
 }
 
+/**
+ * Generates a default request configuration for a given API endpoint.
+ *
+ * The previous version relied on an external AI provider (Anthropic/Groq) to
+ * "generate" the request body and headers. That dependency was removed to
+ * comply with the corporate policy that bans third-party LLM APIs. The Cursor
+ * agent is now the source of any creative test design — call this generator
+ * for the boilerplate config, and ask the agent for variations when needed.
+ */
 export class TestGenerator {
   async generateTestRequest(request: TestGenerationRequest): Promise<RequestConfig> {
-    logger.debug(`Generating test request for ${request.method} ${request.apiEndpoint}`);
-
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      logger.warn('ANTHROPIC_API_KEY not set. Using default configuration.');
-      return this.getDefaultTestRequest(request);
-    }
-
-    try {
-      const prompt = this.buildPrompt(request);
-      const responseText = await this.callAnthropicAPI(apiKey, prompt);
-
-      // Parse JSON from response
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        logger.warn('Could not parse JSON from Claude response. Using default.');
-        return this.getDefaultTestRequest(request);
-      }
-
-      const generatedConfig = JSON.parse(jsonMatch[0]);
-
-      const testRequest: RequestConfig = {
-        method: request.method,
-        url: request.apiEndpoint,
-        headers: generatedConfig.headers || {},
-        data: generatedConfig.data || undefined,
-      };
-
-      logger.success(`Generated test request for ${request.apiEndpoint}`);
-      return testRequest;
-    } catch (error) {
-      logger.warn(`Failed to generate with AI: ${error instanceof Error ? error.message : String(error)}`);
-      return this.getDefaultTestRequest(request);
-    }
+    logger.debug(`Generating default test request for ${request.method} ${request.apiEndpoint}`);
+    return this.getDefaultTestRequest(request);
   }
 
   private getDefaultTestRequest(request: TestGenerationRequest): RequestConfig {
@@ -59,80 +34,6 @@ export class TestGenerator {
       },
       data: request.method !== 'GET' ? { test: true } : undefined,
     };
-  }
-
-  private callAnthropicAPI(apiKey: string, prompt: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const data = JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
-
-      const options = {
-        hostname: 'api.anthropic.com',
-        path: '/v1/messages',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(data),
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let responseData = '';
-
-        res.on('data', (chunk) => {
-          responseData += chunk;
-        });
-
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(responseData);
-            if (parsed.content && parsed.content[0] && parsed.content[0].text) {
-              resolve(parsed.content[0].text);
-            } else {
-              reject(new Error('Unexpected API response format'));
-            }
-          } catch (e) {
-            reject(e);
-          }
-        });
-      });
-
-      req.on('error', reject);
-      req.write(data);
-      req.end();
-    });
-  }
-
-  private buildPrompt(request: TestGenerationRequest): string {
-    const scenario = request.scenario || 'load-test';
-    const targetRPS = request.targetRPS || 100;
-
-    return `You are a performance testing expert. Generate a realistic HTTP ${request.method} request configuration for performance testing.
-
-API Endpoint: ${request.apiEndpoint}
-HTTP Method: ${request.method}
-Test Scenario: ${scenario}
-Target RPS: ${targetRPS}
-${request.description ? `Description: ${request.description}` : ''}
-
-Generate a valid JSON object with the following structure (only return the JSON, no markdown):
-{
-  "headers": {
-    "Content-Type": "application/json",
-    "User-Agent": "performance-testing-poc"
-  },
-  "data": ${request.method !== 'GET' ? `{ "test": true }` : 'null'}
-}`;
   }
 }
 
